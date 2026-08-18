@@ -179,7 +179,9 @@
   }
   .hero-sub{margin-top:1.4em;font-size:clamp(.9rem,3.6vw,1.1rem);opacity:.82;letter-spacing:.05em;max-width:34ch}
 
-  #garden{position:fixed;left:0;right:0;bottom:0;height:min(32vh,240px);z-index:4;pointer-events:none;opacity:0;transition:opacity 2s}
+  #garden{position:fixed;left:0;right:0;bottom:0;height:min(32vh,240px);z-index:3;pointer-events:none;opacity:0;transition:opacity 2s}
+  #cottonRun{position:fixed;left:0;bottom:0;width:100%;height:min(32vh,240px);z-index:4;pointer-events:none;opacity:0;transition:opacity 1.4s}
+  #cottonRun.in{opacity:1}
   #garden.in{opacity:1}
 
   .card{
@@ -287,7 +289,7 @@
   }
   .replay:hover{background:rgba(255,214,150,.16)}
 
-  #balloons{position:fixed;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+  #balloons{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden}
   .balloon{position:absolute;bottom:-24vh;width:44px;aspect-ratio:1/1.2;border-radius:50% 50% 48% 48%/46% 46% 56% 56%;opacity:.85}
   .balloon::after{content:"";position:absolute;left:50%;top:99%;width:1px;height:70px;background:linear-gradient(180deg,rgba(255,255,255,.5),transparent)}
 
@@ -335,6 +337,7 @@
 <canvas id="stars"></canvas>
 <canvas id="fx"></canvas>
 <svg id="garden" viewBox="0 0 1000 300" preserveAspectRatio="none"></svg>
+<canvas id="cottonRun"></canvas>
 <div id="balloons"></div>
 
 <div id="music" class="off" title="Music">&#9834;</div>
@@ -567,8 +570,8 @@
   function makeFlower(x, scale, delay){
     var g = document.createElementNS(NS, "g");
     var cols = pick(FLOWER_COLS);
-    var h = rand(95, 185) * scale;
-    var baseY = 300;
+    var h = rand(90, 170) * scale;
+    var baseY = 266;
     var topY = baseY - h;
     var bend = rand(-26, 26);
 
@@ -630,12 +633,54 @@
   }
 
   function growGarden(){
-    garden.innerHTML = "";
+    garden.innerHTML =
+      '<defs>' +
+      '<linearGradient id="soil" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#4a8a55"/><stop offset=".3" stop-color="#2f6540"/>' +
+      '<stop offset="1" stop-color="#1c3626"/></linearGradient>' +
+      '</defs>';
     garden.classList.add("in");
+
+    // 1. the ground itself rises into place
+    var soil = document.createElementNS(NS, "path");
+    soil.setAttribute("d", "M0,300 L0,270 Q62,261 125,268 Q188,275 250,266 Q312,258 375,266 " +
+      "Q438,274 500,267 Q562,260 625,267 Q688,274 750,265 Q812,257 875,266 Q938,274 1000,268 L1000,300 Z");
+    soil.setAttribute("fill", "url(#soil)");
+    soil.setAttribute("transform", "translate(0,46)");
+    garden.appendChild(soil);
+    setTimeout(function(){
+      soil.style.transition = "transform 1.4s cubic-bezier(.2,.8,.3,1)";
+      soil.setAttribute("transform", "translate(0,0)");
+    }, 60);
+
+    // 2. grass sprouts out of it in a wave
+    var blades = 84;
+    for (var i = 0; i < blades; i++){
+      (function(i){
+        var x = (1000 / blades) * i + rand(-5, 5);
+        var h = rand(15, 44), bend = rand(-13, 13), yb = 268;
+        var b = document.createElementNS(NS, "path");
+        b.setAttribute("d", "M" + x + "," + yb + " Q" + (x + bend * .4) + "," + (yb - h * .6) +
+                            " " + (x + bend) + "," + (yb - h));
+        b.setAttribute("stroke", Math.random() < .5 ? "#57a862" : "#3f8a4e");
+        b.setAttribute("stroke-width", rand(1.7, 3.1).toFixed(2));
+        b.setAttribute("stroke-linecap", "round");
+        b.setAttribute("fill", "none");
+        var len = h * 1.35;
+        b.setAttribute("stroke-dasharray", len);
+        b.setAttribute("stroke-dashoffset", len);
+        garden.appendChild(b);
+        setTimeout(function(){
+          b.style.transition = "stroke-dashoffset .9s cubic-bezier(.2,.8,.3,1)";
+          b.setAttribute("stroke-dashoffset", "0");
+        }, 420 + i * 10 + rand(0, 140));
+      })(i);
+    }
+
+    // 3. then the flowers bloom through the grass
     var n = 22;
-    for (var i = 0; i < n; i++){
-      var x = (1000 / n) * i + rand(-16, 16);
-      makeFlower(x, rand(.55, 1.05), 200 + i * 130 + rand(0, 220));
+    for (var j = 0; j < n; j++){
+      makeFlower((1000 / n) * j + rand(-16, 16), rand(.55, 1.05), 1100 + j * 120 + rand(0, 200));
     }
   }
 
@@ -735,6 +780,297 @@
   }
   musicBtn.addEventListener("click", function(){ musicOn ? stopMusic() : startMusic(); });
 
+
+  /* ================= RAGDOLL COTTON ================= */
+  var dogCv = document.getElementById("cottonRun"), dctx = dogCv.getContext("2d");
+  var DW = 0, DH = 0, SC = 1, GY = 0, dogOn = false, dogReady = false;
+  var TAU = Math.PI * 2;
+  var FUR = "#fffaf4", FUR_MID = "#eadfe8", FUR_DEEP = "#c9bacd";
+  var INK = "#2b1f2b", PINK = "#f2adc2";
+
+  function P(x, y){ return { x:x, y:y, px:x, py:y }; }
+  function verlet(p, grav, damp){
+    var vx = (p.x - p.px) * damp, vy = (p.y - p.py) * damp;
+    p.px = p.x; p.py = p.y;
+    p.x += vx; p.y += vy + grav;
+  }
+  /* holds p a fixed distance from anchor - only p moves, so chains hang floppily */
+  function pull(anchor, p, len){
+    var dx = p.x - anchor.x, dy = p.y - anchor.y;
+    var d = Math.sqrt(dx * dx + dy * dy) || .0001;
+    var f = (d - len) / d;
+    p.x -= dx * f; p.y -= dy * f;
+  }
+
+  var dog = {
+    x:0, dir:1, speed:0, gait:0, jumpY:0, jumpV:0,
+    state:"run", timer:0, wag:0,
+    shoulder:null, hip:null, head:null, neck:null, legs:[], tail:[]
+  };
+
+  function dogResize(){
+    var r = dogCv.getBoundingClientRect();
+    DW = Math.max(r.width, 1); DH = Math.max(r.height, 1);
+    dogCv.width = DW * dpr; dogCv.height = DH * dpr;
+    dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    SC = Math.max(.68, Math.min(1.2, DW / 400));
+    GY = DH - 22 * SC;
+    if (dogReady) dog.x = Math.max(50 * SC, Math.min(DW - 50 * SC, dog.x));
+  }
+
+  function dogInit(){
+    dogResize();
+    var by = GY - 33 * SC;
+    dog.x = DW * .28; dog.dir = 1;
+    dog.shoulder = P(dog.x + 13.5 * SC, by);
+    dog.hip      = P(dog.x - 13.5 * SC, by);
+    dog.neck     = P(dog.x + 24 * SC, by - 11 * SC);
+    dog.head     = P(dog.x + 31 * SC, by - 19 * SC);
+    dog.legs = [];
+    /* far pair drawn behind, near pair in front; diagonal gait offsets */
+    var spec = [ [true, 0], [false, .5], [true, .5], [false, 0] ];
+    for (var i = 0; i < spec.length; i++){
+      var a = spec[i][0] ? dog.shoulder : dog.hip;
+      dog.legs.push({ front: spec[i][0], off: spec[i][1],
+                      knee: P(a.x, a.y + 16 * SC), paw: P(a.x, GY) });
+    }
+    dog.tail = [ P(dog.hip.x - 6 * SC,  dog.hip.y - 9 * SC),
+                 P(dog.hip.x - 10 * SC, dog.hip.y - 18 * SC),
+                 P(dog.hip.x - 12 * SC, dog.hip.y - 27 * SC) ];
+    dogReady = true;
+  }
+
+  function dogStep(){
+    var i, l;
+    dog.timer--;
+
+    if (dog.state === "run"){
+      dog.speed += (1.6 * SC - dog.speed) * .05;
+      dog.x += dog.speed * dog.dir;
+      var edge = 62 * SC;
+      if ((dog.dir > 0 && dog.x > DW - edge) || (dog.dir < 0 && dog.x < edge)){
+        dog.state = "stop"; dog.timer = 75;
+      } else if (dog.timer < 0 && Math.random() < .004){
+        dog.state = "stop"; dog.timer = 95;
+      }
+    } else {
+      dog.speed += (0 - dog.speed) * .12;
+      dog.x += dog.speed * dog.dir;
+      dog.wag = 1;
+      if (dog.timer <= 0){
+        dog.wag = 0;
+        var m = 66 * SC;
+        if (dog.x > DW - m) dog.dir = -1;
+        else if (dog.x < m) dog.dir = 1;
+        else dog.dir = Math.random() < .5 ? -1 : 1;
+        dog.state = "run"; dog.timer = 130;
+      }
+    }
+
+    dog.gait = (dog.gait + dog.speed * .026 / SC + 1) % 1;
+
+    if (dog.jumpY > 0 || dog.jumpV > 0){
+      dog.jumpV -= .55 * SC;
+      dog.jumpY += dog.jumpV;
+      if (dog.jumpY <= 0){ dog.jumpY = 0; dog.jumpV = 0; }
+    }
+
+    /* the body is driven; everything hanging off it is physics */
+    var bob = Math.sin(dog.gait * TAU * 2) * 2.2 * SC;
+    var by = GY - 33 * SC + bob - dog.jumpY;
+    dog.shoulder.x = dog.x + 13.5 * SC * dog.dir;
+    dog.shoulder.y = by - SC;
+    dog.hip.x = dog.x - 13.5 * SC * dog.dir;
+    dog.hip.y = by + Math.sin(dog.gait * TAU * 2 + 1.1) * 1.4 * SC;
+
+    var stride = 16 * SC, lift = 12 * SC;
+    for (i = 0; i < dog.legs.length; i++){
+      l = dog.legs[i];
+      var anch = l.front ? dog.shoulder : dog.hip;
+      var restX = anch.x + (l.front ? 2 : -2) * SC * dog.dir;
+      var t = (dog.gait + l.off) % 1, tx, ty, sw;
+      if (dog.jumpY > 1){
+        tx = restX + (l.front ? 8 : -8) * SC * dog.dir;
+        ty = anch.y + 15 * SC;
+      } else if (t < .55){
+        sw = t / .55;
+        tx = restX + (stride * .5 - sw * stride) * dog.dir;
+        ty = GY;
+      } else {
+        sw = (t - .55) / .45;
+        tx = restX + (-stride * .5 + sw * stride) * dog.dir;
+        ty = GY - lift * Math.sin(sw * Math.PI);
+      }
+      l.paw.x += (tx - l.paw.x) * .32;
+      l.paw.y += (ty - l.paw.y) * .32;
+
+      verlet(l.knee, .28 * SC, .92);
+      for (var k = 0; k < 4; k++){
+        pull(anch, l.knee, 16.5 * SC);
+        pull(l.paw, l.knee, 16.5 * SC);
+      }
+    }
+
+    /* head springs toward a carry position but bobs under gravity */
+    verlet(dog.head, .32 * SC, .9);
+    var htx = dog.shoulder.x + 16 * SC * dog.dir, hty = dog.shoulder.y - 22 * SC;
+    dog.head.x += (htx - dog.head.x) * .16;
+    dog.head.y += (hty - dog.head.y) * .16;
+    pull(dog.shoulder, dog.head, 27 * SC);
+    dog.neck.x = (dog.shoulder.x + dog.head.x) * .5;
+    dog.neck.y = (dog.shoulder.y + dog.head.y) * .5;
+
+    /* plume tail - floppy chain with lift so it arcs over her back */
+    var prev = dog.hip;
+    for (i = 0; i < dog.tail.length; i++){
+      var tp = dog.tail[i];
+      verlet(tp, .14 * SC, .93);
+      tp.y -= 1.05 * SC;
+      tp.x -= dog.dir * .04 * SC;
+      if (dog.wag) tp.x += Math.sin(Date.now() * .022 + i * .8) * 1.3 * SC;
+      pull(prev, tp, 9.5 * SC);
+      prev = tp;
+    }
+  }
+
+  /* wobbly fur outline instead of a clean ellipse */
+  function fluff(cx, cy, rx, ry, ang, bumps, amp, seed){
+    dctx.beginPath();
+    for (var i = 0; i <= 48; i++){
+      var a = i / 48 * TAU;
+      var r = 1 + Math.sin(a * bumps + seed) * amp;
+      var x = Math.cos(a) * rx * r, y = Math.sin(a) * ry * r;
+      var xr = x * Math.cos(ang) - y * Math.sin(ang);
+      var yr = x * Math.sin(ang) + y * Math.cos(ang);
+      if (i === 0) dctx.moveTo(cx + xr, cy + yr); else dctx.lineTo(cx + xr, cy + yr);
+    }
+    dctx.closePath();
+  }
+
+  function drawLeg(l, col){
+    var anch = l.front ? dog.shoulder : dog.hip;
+    dctx.strokeStyle = col; dctx.fillStyle = col;
+    dctx.lineCap = "round"; dctx.lineJoin = "round"; dctx.lineWidth = 6.2 * SC;
+    dctx.beginPath();
+    dctx.moveTo(anch.x, anch.y + 4 * SC);
+    dctx.lineTo(l.knee.x, l.knee.y);
+    dctx.lineTo(l.paw.x, l.paw.y);
+    dctx.stroke();
+    dctx.beginPath();
+    dctx.ellipse(l.paw.x, l.paw.y, 4.3 * SC, 3.2 * SC, 0, 0, TAU);
+    dctx.fill();
+  }
+
+  function drawTail(){
+    var pts = dog.tail, rads = [6.5, 10, 9], i;
+    dctx.fillStyle = FUR_MID;
+    for (i = 0; i < pts.length; i++){
+      fluff(pts[i].x, pts[i].y, rads[i] * SC, rads[i] * SC, i, 7, .17, i * 2.1);
+      dctx.fill();
+    }
+    dctx.fillStyle = FUR;
+    for (i = 0; i < pts.length; i++){
+      fluff(pts[i].x - SC, pts[i].y - 1.3 * SC, rads[i] * .84 * SC, rads[i] * .84 * SC, i, 7, .17, i * 2.1 + 1);
+      dctx.fill();
+    }
+  }
+
+  function drawBody(){
+    var mx = (dog.shoulder.x + dog.hip.x) * .5, my = (dog.shoulder.y + dog.hip.y) * .5;
+    var ang = Math.atan2(dog.shoulder.y - dog.hip.y, dog.shoulder.x - dog.hip.x);
+    dctx.fillStyle = FUR_MID;
+    fluff(mx, my + 1.6 * SC, 21.5 * SC, 15 * SC, ang, 9, .085, .7); dctx.fill();
+    dctx.fillStyle = FUR;
+    fluff(mx, my - SC, 20 * SC, 13.5 * SC, ang, 9, .08, 2.2); dctx.fill();
+  }
+
+  function drawHead(){
+    dctx.save();
+    dctx.translate(dog.head.x, dog.head.y);
+    var tilt = Math.max(-.28, Math.min(.28, (dog.head.y - (dog.shoulder.y - 22 * SC)) * .02));
+    dctx.rotate(tilt);
+    dctx.scale(dog.dir, 1);
+
+    /* pointed pomeranian ears, floppy with the gait */
+    var flop = Math.sin(dog.gait * TAU * 2) * .13;
+    var ears = [[-7.5, -10, -.42 + flop, 1.08], [7.5, -11.5, .1 + flop, .97]];
+    for (var e = 0; e < ears.length; e++){
+      dctx.save();
+      dctx.translate(ears[e][0] * SC, ears[e][1] * SC);
+      dctx.rotate(ears[e][2]); dctx.scale(ears[e][3], ears[e][3]);
+      dctx.fillStyle = e === 0 ? "#f2e8f0" : FUR;
+      dctx.beginPath();
+      dctx.moveTo(0, 5 * SC); dctx.lineTo(-6 * SC, -12 * SC); dctx.lineTo(7.5 * SC, -3 * SC);
+      dctx.closePath(); dctx.fill();
+      dctx.fillStyle = PINK;
+      dctx.beginPath();
+      dctx.moveTo(.4 * SC, 2.6 * SC); dctx.lineTo(-3.4 * SC, -7.6 * SC); dctx.lineTo(4 * SC, -2.4 * SC);
+      dctx.closePath(); dctx.fill();
+      dctx.restore();
+    }
+
+    dctx.fillStyle = FUR;
+    fluff(0, 0, 15 * SC, 13.5 * SC, 0, 8, .1, 1.4); dctx.fill();
+    dctx.beginPath(); dctx.ellipse(12 * SC, 4 * SC, 8.4 * SC, 5.6 * SC, .14, 0, TAU); dctx.fill();
+
+    dctx.fillStyle = "rgba(242,173,194,.45)";
+    dctx.beginPath(); dctx.ellipse(1.5 * SC, 6 * SC, 3.8 * SC, 2.4 * SC, 0, 0, TAU); dctx.fill();
+
+    dctx.fillStyle = INK;
+    dctx.beginPath(); dctx.ellipse(18.6 * SC, 2.4 * SC, 2.9 * SC, 2.3 * SC, 0, 0, TAU); dctx.fill();
+    dctx.strokeStyle = INK; dctx.lineWidth = 1.1 * SC; dctx.lineCap = "round";
+    dctx.beginPath();
+    dctx.moveTo(17 * SC, 5.8 * SC);
+    dctx.quadraticCurveTo(13.4 * SC, 8.4 * SC, 10.4 * SC, 6.8 * SC);
+    dctx.stroke();
+
+    dctx.fillStyle = INK;
+    dctx.beginPath(); dctx.ellipse(5.4 * SC, -2 * SC, 2.7 * SC, 3.1 * SC, 0, 0, TAU); dctx.fill();
+    dctx.fillStyle = "#fff";
+    dctx.beginPath(); dctx.arc(6.3 * SC, -3.2 * SC, 1.05 * SC, 0, TAU); dctx.fill();
+    dctx.restore();
+  }
+
+  function drawDog(){
+    dctx.clearRect(0, 0, DW, DH);
+    var sh = 1 - Math.min(dog.jumpY / (30 * SC), .72);
+    dctx.fillStyle = "rgba(16,5,22," + (.32 * sh).toFixed(3) + ")";
+    dctx.beginPath();
+    dctx.ellipse(dog.x, GY + 4 * SC, 26 * SC * sh, 4.6 * SC * sh, 0, 0, TAU);
+    dctx.fill();
+    drawLeg(dog.legs[0], FUR_DEEP);
+    drawLeg(dog.legs[1], FUR_DEEP);
+    drawBody();
+    drawTail();
+    drawLeg(dog.legs[2], FUR);
+    drawLeg(dog.legs[3], FUR);
+    dctx.fillStyle = FUR;
+    fluff(dog.neck.x, dog.neck.y + 2 * SC, 11.5 * SC, 10.5 * SC, 0, 8, .13, 3.1);
+    dctx.fill();
+    drawHead();
+  }
+
+  function dogLoop(){
+    if (!dogOn) return;
+    dogStep(); drawDog();
+    requestAnimationFrame(dogLoop);
+  }
+  function startDog(){
+    if (dogOn) return;
+    dogInit();
+    dogOn = true;
+    dogCv.classList.add("in");
+    if (reduced){ drawDog(); return; }
+    requestAnimationFrame(dogLoop);
+  }
+  function heartPop(x, y){
+    for (var i = 0; i < 10; i++){
+      parts.push({ x:x + rand(-14, 14), y:y, vx:rand(-1.1, 1.1), vy:rand(-2.6, -1.2),
+                   life:1, decay:.014, col:"255,143,177", size:rand(1.8, 3.2), grav:-.02 });
+    }
+    startFx();
+  }
+
   /* ================= REVEAL ON SCROLL ================= */
   var io = new IntersectionObserver(function(entries){
     entries.forEach(function(e){
@@ -776,6 +1112,7 @@
       musicBtn.classList.add("show");
       document.querySelectorAll(".rise").forEach(function(el){ io.observe(el); });
       growGarden();
+      startDog();
     }, 1500);
     setTimeout(function(){ autoFire = false; }, 15000);
   }
@@ -787,6 +1124,14 @@
   document.addEventListener("click", function(e){
     if (!opened || reduced) return;
     if (e.target.closest("#music") || e.target.closest("#replay")) return;
+    if (dogReady){
+      var dr = dogCv.getBoundingClientRect();
+      if (e.clientY > dr.top && Math.abs((e.clientX - dr.left) - dog.x) < 48 * SC){
+        if (dog.jumpY === 0) dog.jumpV = 7.6 * SC;
+        heartPop(e.clientX, e.clientY);
+        return;
+      }
+    }
     launchRocket(e.clientX, e.clientY);
     startFx();
   });
@@ -800,7 +1145,7 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
-  window.addEventListener("resize", function(){ buildStars(); fxResize(); });
+  window.addEventListener("resize", function(){ buildStars(); fxResize(); if (dogReady) dogResize(); });
 })();
 </script>
 </body>
