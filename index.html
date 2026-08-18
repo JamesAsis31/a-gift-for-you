@@ -160,8 +160,13 @@
   }
   .scene.roomy{padding-bottom:clamp(40px,7vh,80px)}
   .scene.roomy .scroll-cue{bottom:20px}
-  .rise{opacity:0;transform:translateY(34px);transition:opacity 1.1s ease,transform 1.1s cubic-bezier(.2,.7,.3,1)}
-  .rise.in{opacity:1;transform:none}
+  /* .rise is a utility, so it has to beat the component rules that set their
+     own opacity (.hero-sub, .cotton-line, .eyebrow ...). Hiding is forced via
+     :not(.in) for the extra specificity; revealing simply stops forcing it, so
+     each element settles back to its own intended opacity rather than 1. */
+  .rise{transform:translateY(34px);transition:opacity 1.1s ease,transform 1.1s cubic-bezier(.2,.7,.3,1)}
+  .rise:not(.in){opacity:0}
+  .rise.in{transform:none}
 
   .eyebrow{
     font-size:clamp(.66rem,2.5vw,.8rem);letter-spacing:.4em;text-transform:uppercase;
@@ -234,8 +239,27 @@
     mask-image:radial-gradient(circle,transparent 26%,#000 42%,transparent 72%);
     animation:spin 46s linear infinite;
   }
+  /* the doghouse and the photo frame occupy the same slot, so the frame
+     takes the doghouse's place once Cotton has come out of it */
+  .frame-slot{
+    position:relative;display:grid;place-items:center;
+    width:min(62vw,255px);aspect-ratio:1/1.08;
+  }
+  .frame-slot > *{grid-area:1/1}
+  .doghouse{width:100%;display:flex;align-items:center;justify-content:center}
+  .doghouse svg{width:100%;height:auto;filter:drop-shadow(0 14px 26px rgba(0,0,0,.55))}
+  .doghouse.knocking{animation:dhKnock .62s ease-in-out}
+  .doghouse.gone{opacity:0;transform:scale(.82);transition:opacity .5s ease,transform .5s ease}
+  @keyframes dhKnock{
+    0%,100%{transform:translateY(0) rotate(0)}
+    12%{transform:translateY(-5px) rotate(-2.6deg)}
+    26%{transform:translateY(0) rotate(1.8deg)}
+    44%{transform:translateY(-4px) rotate(-1.9deg)}
+    60%{transform:translateY(0) rotate(1.3deg)}
+    78%{transform:translateY(-3px) rotate(-1deg)}
+  }
   .locket{
-    position:relative;width:min(62vw,255px);aspect-ratio:1/1.08;
+    position:relative;width:100%;aspect-ratio:1/1.08;
     border-radius:50% 50% 48% 48%/52% 52% 48% 48%;
     padding:7px;
     background:linear-gradient(150deg,#fff3d6,var(--gold) 30%,#c9913f 55%,var(--gold) 78%,#fff6e0);
@@ -351,10 +375,12 @@
     .hero-name{margin-top:.25em;font-size:clamp(1.05rem,4.4vw,1.7rem)}
     .hero-sub{margin-top:.6em}
 
-    .locket{width:min(30vw,130px)}
+    /* the locket sizes off .frame-slot now, so shrink the slot itself
+       or the doghouse and the frame both stay full size */
+    .frame-slot{width:min(30vw,130px)}
     .cotton-name{margin-top:.35em;font-size:clamp(1.3rem,5.5vw,2rem)}
-    .cotton-line{margin-top:.3em}
-    .paws{margin-top:8px;height:30px}
+    .cotton-line{margin-top:.3em;font-size:clamp(.78rem,3vw,.95rem);line-height:1.5;max-width:44ch}
+    .paws{margin-top:14px;height:24px}
 
     .finale-word{font-size:clamp(1.3rem,6vw,2.2rem)}
     .from{margin-top:.9em}
@@ -428,15 +454,59 @@
       <div class="rays"></div>
       <div class="halo"></div>
       <div class="eyebrow rise" style="position:relative">And someone who never really left</div>
-      <div class="locket rise">
-        <div class="locket-inner">
-          <img src="assets/cotton2.jpg" alt="Cotton, a little white dog resting on her red bed">
-          <div class="shine"></div>
-          <div class="vig"></div>
+
+      <div class="frame-slot">
+        <div class="doghouse rise" id="doghouse">
+          <svg viewBox="0 0 200 190" aria-label="Cotton's doghouse">
+            <defs>
+              <linearGradient id="dhWall" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#d59a63"/><stop offset="1" stop-color="#8a5730"/>
+              </linearGradient>
+              <linearGradient id="dhRoof" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ef7a5f"/><stop offset="1" stop-color="#a5382a"/>
+              </linearGradient>
+              <linearGradient id="dhPlate" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffe9b8"/><stop offset="1" stop-color="#e0ab5c"/>
+              </linearGradient>
+              <radialGradient id="dhDoor">
+                <stop offset="0" stop-color="#4a2a1c"/><stop offset="1" stop-color="#140a0c"/>
+              </radialGradient>
+              <radialGradient id="dhGlow">
+                <stop offset="0" stop-color="#ffd88a" stop-opacity=".65"/>
+                <stop offset="1" stop-color="#ffd88a" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <ellipse cx="100" cy="180" rx="74" ry="8" fill="rgba(10,4,14,.45)"/>
+            <rect x="34" y="78" width="132" height="98" rx="5" fill="url(#dhWall)"/>
+            <g stroke="rgba(90,52,26,.45)" stroke-width="1.6">
+              <line x1="62" y1="80" x2="62" y2="176"/>
+              <line x1="100" y1="80" x2="100" y2="176"/>
+              <line x1="138" y1="80" x2="138" y2="176"/>
+            </g>
+            <path d="M100,10 L190,80 L176,80 L100,24 L24,80 L10,80 Z" fill="#8f2f24"/>
+            <path d="M100,18 L178,80 L22,80 Z" fill="url(#dhRoof)"/>
+            <g stroke="rgba(120,40,30,.5)" stroke-width="1.5" fill="none">
+              <path d="M60,60 L140,60"/><path d="M44,72 L156,72"/>
+            </g>
+            <ellipse cx="100" cy="150" rx="40" ry="34" fill="url(#dhGlow)"/>
+            <path d="M70,176 L70,120 Q70,96 100,96 Q130,96 130,120 L130,176 Z" fill="url(#dhDoor)"/>
+            <rect x="66" y="82" width="68" height="17" rx="4" fill="url(#dhPlate)"/>
+            <text x="100" y="94.5" text-anchor="middle" font-family="Georgia,serif"
+                  font-size="11" letter-spacing="1.6" fill="#7a4a1c">COTTON</text>
+          </svg>
+        </div>
+
+        <div class="locket rise hold" id="locket">
+          <div class="locket-inner">
+            <img src="assets/cotton2.jpg" alt="Cotton, a little white dog resting on her bed">
+            <div class="shine"></div>
+            <div class="vig"></div>
+          </div>
         </div>
       </div>
-      <div class="cotton-name rise">Cotton</div>
-      <p class="cotton-line rise">She is still here, Ma - curled up in the warmest corner of your heart, watching over you wherever you are. Happy birthday from her too.</p>
+
+      <div class="cotton-name rise hold">Cotton</div>
+      <p class="cotton-line rise hold">She is still here, Ma - curled up in the warmest corner of your heart, watching over you wherever you are. Happy birthday from her too.</p>
       <div class="paws" id="paws"></div>
     </div>
     <div class="scroll-cue">one more</div>
@@ -1023,10 +1093,12 @@
     if (dogReady) dog.x = Math.max(50 * SC, Math.min(DW - 50 * SC, dog.x));
   }
 
-  function dogInit(){
+  function dogInit(atX){
     dogResize();
     var by = GY - 28 * SC;
-    dog.x = DW * .28; dog.dir = 1;
+    dog.x = (atX === undefined) ? DW * .28
+          : Math.max(50 * SC, Math.min(DW - 50 * SC, atX));
+    dog.dir = 1;
     dog.shoulder = P(dog.x + 11.5 * SC, by);
     dog.hip      = P(dog.x - 11.5 * SC, by);
     dog.neck     = P(dog.x + 24 * SC, by - 11 * SC);
@@ -1242,13 +1314,54 @@
     }
   }
 
+  function furGrad(cx, cy, r){
+    var g = dctx.createLinearGradient(cx, cy - r, cx, cy + r);
+    g.addColorStop(0, "#fffdfa");
+    g.addColorStop(.55, FUR);
+    g.addColorStop(1, "#e3d5e4");
+    return g;
+  }
+
   function drawBody(){
     var mx = (dog.shoulder.x + dog.hip.x) * .5, my = (dog.shoulder.y + dog.hip.y) * .5;
     var ang = Math.atan2(dog.shoulder.y - dog.hip.y, dog.shoulder.x - dog.hip.x);
     dctx.fillStyle = FUR_MID;
     fluff(mx, my + 1.6 * SC, 19.5 * SC, 15.5 * SC, ang, 9, .09, .7); dctx.fill();
-    dctx.fillStyle = FUR;
+    dctx.fillStyle = furGrad(mx, my, 16 * SC);
     fluff(mx, my - SC, 18 * SC, 14 * SC, ang, 9, .085, 2.2); dctx.fill();
+    /* chest fluff catching the light */
+    dctx.fillStyle = "rgba(255,255,255,.55)";
+    fluff(dog.shoulder.x + 4 * SC * dog.dir, dog.shoulder.y + 6 * SC,
+          8 * SC, 6.5 * SC, 0, 7, .16, 4.2);
+    dctx.fill();
+  }
+
+  /* her little collar and the gold heart tag, which swings with her */
+  function drawCollar(){
+    var nx = dog.neck.x, ny = dog.neck.y + 4 * SC;
+    var ang = Math.atan2(dog.head.y - dog.shoulder.y, dog.head.x - dog.shoulder.x);
+    dctx.save();
+    dctx.translate(nx, ny);
+    dctx.rotate(ang + Math.PI / 2);
+    dctx.fillStyle = "#d94f7a";
+    dctx.beginPath(); dctx.ellipse(0, 0, 10.8 * SC, 3.3 * SC, 0, 0, TAU); dctx.fill();
+    dctx.fillStyle = "rgba(255,255,255,.28)";
+    dctx.beginPath(); dctx.ellipse(-1.5 * SC, -1 * SC, 7 * SC, 1.1 * SC, 0, 0, TAU); dctx.fill();
+    dctx.restore();
+
+    var sway = Math.sin(Date.now() * .006) * 1.2 * SC * Math.min(1, dog.speed / SC + .25);
+    var tx = nx + sway, ty = ny + 8.5 * SC;
+    dctx.strokeStyle = "#e8b45c"; dctx.lineWidth = 1 * SC;
+    dctx.beginPath(); dctx.moveTo(nx, ny + 2 * SC); dctx.lineTo(tx, ty - 2 * SC); dctx.stroke();
+    var hs = 3.1 * SC;
+    dctx.fillStyle = "#ffd88a";
+    dctx.beginPath();
+    dctx.moveTo(tx, ty + hs * .85);
+    dctx.bezierCurveTo(tx - hs * 1.25, ty - hs * .2, tx - hs * .5, ty - hs * 1.1, tx, ty - hs * .3);
+    dctx.bezierCurveTo(tx + hs * .5, ty - hs * 1.1, tx + hs * 1.25, ty - hs * .2, tx, ty + hs * .85);
+    dctx.closePath(); dctx.fill();
+    dctx.fillStyle = "rgba(255,255,255,.6)";
+    dctx.beginPath(); dctx.arc(tx - hs * .35, ty - hs * .35, hs * .22, 0, TAU); dctx.fill();
   }
 
   function drawHead(){
@@ -1278,8 +1391,11 @@
       dctx.restore();
     }
 
-    dctx.fillStyle = FUR;
+    var hg = dctx.createLinearGradient(0, -17 * SC, 0, 17 * SC);
+    hg.addColorStop(0, "#fffefc"); hg.addColorStop(.6, FUR); hg.addColorStop(1, "#e9dcea");
+    dctx.fillStyle = hg;
     fluff(0, 0, 17.5 * SC, 16 * SC, 0, 8, .1, 1.4); dctx.fill();
+    dctx.fillStyle = "#fffdfa";
     dctx.beginPath(); dctx.ellipse(11.5 * SC, 5 * SC, 7.6 * SC, 5.6 * SC, .14, 0, TAU); dctx.fill();
 
     dctx.fillStyle = "rgba(242,150,180,.55)";
@@ -1352,6 +1468,7 @@
     dctx.fillStyle = FUR;
     fluff(dog.neck.x, dog.neck.y + 2 * SC, 12.5 * SC, 11.5 * SC, 0, 8, .14, 3.1);
     dctx.fill();
+    drawCollar();
     drawHead();
   }
 
@@ -1360,9 +1477,9 @@
     dogStep(); drawDog();
     requestAnimationFrame(dogLoop);
   }
-  function startDog(){
+  function startDog(atX){
     if (dogOn) return;
-    dogInit();
+    dogInit(atX);
     dogOn = true;
     dogCv.classList.add("in");
     if (reduced){ drawDog(); return; }
@@ -1386,10 +1503,10 @@
   }
 
 
-  /* ================= POP OUT OF THE BOX + LICK THE SCREEN =================
-     A one-shot hero animation, fully self-contained (its own canvas, its
-     own pose state) so it can never collide with the garden-running
-     Cotton's state even though the two can briefly overlap in time. */
+  /* ================= COTTON'S ENTRANCE =================
+     A one-shot hero animation on its own full-viewport canvas with its own
+     pose state, kept separate from the garden-running Cotton so the two can
+     never fight over shared state during the hand-off. */
   var popCv = document.getElementById("dogPop"), popCtx = popCv.getContext("2d");
   var PW = 0, PH = 0;
   function popResize(){ var d = sizeCanvas(popCv, popCtx); PW = d[0]; PH = d[1]; }
@@ -1459,6 +1576,21 @@
     popCtx.fillStyle = FUR;
     fluffPop(0, -12, 15, 14, 0, 8, .13, 3.1); popCtx.fill();
 
+    /* the same collar and heart tag she wears in the garden */
+    popCtx.fillStyle = "#d94f7a";
+    popCtx.beginPath(); popCtx.ellipse(0, -6, 13, 3.7, 0, 0, TAU); popCtx.fill();
+    popCtx.fillStyle = "rgba(255,255,255,.28)";
+    popCtx.beginPath(); popCtx.ellipse(-2, -7.2, 8, 1.2, 0, 0, TAU); popCtx.fill();
+    var hs = 3.6, hx = 0, hy = 1.5;
+    popCtx.strokeStyle = "#e8b45c"; popCtx.lineWidth = 1.1;
+    popCtx.beginPath(); popCtx.moveTo(0, -3); popCtx.lineTo(hx, hy - hs); popCtx.stroke();
+    popCtx.fillStyle = "#ffd88a";
+    popCtx.beginPath();
+    popCtx.moveTo(hx, hy + hs * .85);
+    popCtx.bezierCurveTo(hx - hs * 1.25, hy - hs * .2, hx - hs * .5, hy - hs * 1.1, hx, hy - hs * .3);
+    popCtx.bezierCurveTo(hx + hs * .5, hy - hs * 1.1, hx + hs * 1.25, hy - hs * .2, hx, hy + hs * .85);
+    popCtx.closePath(); popCtx.fill();
+
     popCtx.save();
     popCtx.translate(0, -26);
 
@@ -1512,120 +1644,106 @@
     popCtx.restore();
   }
 
-  /* the big cartoon tongue swipe that "licks the screen" - grown by
-     sampling a quadratic curve up to the current progress, so it
-     reads as one continuous swoosh rather than a static shape */
-  function drawLickSwipe(mouthX, mouthY, screenSC, t){
-    var ctrl = { x: PW * .52, y: PH * .16 };
-    var end  = { x: PW * .9,  y: PH * .04 };
-    var reach = Math.min(1, t * 1.18);
-    var steps = 26, pts = [];
-    for (var i = 0; i <= steps; i++){
-      var q = (i / steps) * reach;
-      var ix = (1 - q) * (1 - q) * mouthX + 2 * (1 - q) * q * ctrl.x + q * q * end.x;
-      var iy = (1 - q) * (1 - q) * mouthY + 2 * (1 - q) * q * ctrl.y + q * q * end.y;
-      pts.push([ix, iy]);
-    }
-    if (pts.length < 2) return pts[0] || [mouthX, mouthY];
-
-    var width = Math.min(PW, PH) * (.16 + .1 * Math.sin(Math.min(t, 1) * Math.PI));
-    popCtx.save();
-    popCtx.globalAlpha = .5;
-    popCtx.strokeStyle = "#ff9dc0";
-    popCtx.lineCap = "round"; popCtx.lineJoin = "round";
-    popCtx.lineWidth = width;
-    popCtx.beginPath();
-    popCtx.moveTo(pts[0][0], pts[0][1]);
-    for (i = 1; i < pts.length; i++) popCtx.lineTo(pts[i][0], pts[i][1]);
-    popCtx.stroke();
-
-    popCtx.globalAlpha = .28;
-    popCtx.strokeStyle = "#fff0f6";
-    popCtx.lineWidth = width * .4;
-    popCtx.stroke();
-    popCtx.restore();
-
-    var tip = pts[pts.length - 1];
-    var glow = popCtx.createRadialGradient(tip[0], tip[1], 0, tip[0], tip[1], width * .9);
-    glow.addColorStop(0, "rgba(255,244,250,.55)");
-    glow.addColorStop(1, "rgba(255,244,250,0)");
-    popCtx.save();
-    popCtx.fillStyle = glow;
-    popCtx.beginPath(); popCtx.arc(tip[0], tip[1], width * .9, 0, TAU); popCtx.fill();
-    popCtx.restore();
-    return tip;
-  }
-
-  function runPopIntro(){
-    if (reduced) return;
+  /* Cotton bursts out of the doghouse door and leaps down into the garden.
+     Runs on the full-viewport canvas so she can travel from the doghouse
+     (mid-page) all the way to the garden band at the bottom, then hands
+     off to the little garden Cotton at the landing point. */
+  function runDogExit(dh, onLanded){
     popResize();
-    var boxRect = document.getElementById("boxStage").getBoundingClientRect();
-    var startX = boxRect.left + boxRect.width * .5;
-    var startY = boxRect.top + boxRect.height * .35;
-    var landX = PW * .5;
-    var landY = Math.min(PH * .6, startY + PH * .26);
-    var baseSC = Math.max(1.05, Math.min(2.5, PW / 340));
+    dogResize();
+    var r = dh.getBoundingClientRect();
+    var cr = dogCv.getBoundingClientRect();
+    var startX = r.left + r.width * .5;
+    var startY = r.top + r.height * .80;
+    var landX = Math.max(70, Math.min(PW - 70, startX + rand(-40, 40)));
+    var landY = cr.top + GY;
+    var baseSC = Math.max(.85, Math.min(1.9, PW / 430));
+    var DUR = 980;
 
     popCv.style.opacity = "1";
-    var t0 = null, poofed = false, licked1 = false, licked2 = false;
+    poofAt(startX, startY, baseSC);
+    var t0 = null, thumped = false;
 
     function frame(now){
       if (t0 === null) t0 = now;
       var t = now - t0;
       popCtx.clearRect(0, 0, PW, PH);
 
-      var x, y, sc = baseSC, sqx = 1, sqy = 1, tilt = 0, tongueT = 0;
-
-      if (t < 550){
-        var p = t / 550, e = p < .5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
+      if (t < DUR){
+        var p = t / DUR;
+        var e = p * p * (3 - 2 * p);
         var arc = Math.sin(p * Math.PI);
-        x = startX + (landX - startX) * e;
-        y = startY + (landY - startY) * e - arc * PH * .2;
-        sc = baseSC * (.5 + .55 * e);
-        sqy = 1 - arc * .16; sqx = 1 + arc * .1;
-        tilt = (p - .5) * .5;
-      } else if (t < 700){
-        var p2 = (t - 550) / 150;
-        x = landX; y = landY; sc = baseSC;
-        sqy = .8 + p2 * .2; sqx = 1.2 - p2 * .2;
-        if (!poofed){ poofed = true; poofAt(landX, landY + 28 * baseSC, baseSC); }
-      } else if (t < 1050){
-        var p3 = (t - 700) / 350;
-        x = landX; y = landY - Math.abs(Math.sin(p3 * Math.PI * 2)) * PH * .015;
-        tilt = Math.sin(p3 * Math.PI * 2) * .06;
-      } else if (t < 1900){
-        var p4 = (t - 1050) / 850;
-        x = landX; y = landY; tilt = -.14;
-        tongueT = Math.sin(Math.min(p4, 1) * Math.PI);
-        if (!licked1 && p4 > .18){ licked1 = true; heartPop(landX - 40 * baseSC, landY - 60 * baseSC); }
-        if (!licked2 && p4 > .55){ licked2 = true; heartPop(landX + 50 * baseSC, landY - 90 * baseSC); }
-      } else if (t < 2350){
-        var p5 = (t - 1900) / 450;
-        x = landX; y = landY; sc = baseSC * (1 - p5 * .05);
-        popCv.style.opacity = String(Math.max(0, 1 - p5));
+        var x = startX + (landX - startX) * e;
+        var y = startY + (landY - startY) * e - arc * Math.min(PH * .16, 130);
+        var sc = baseSC * (.42 + .58 * e);
+        var sqy = 1 - arc * .1, sqx = 1 + arc * .07;
+        drawPopDog(x, y - 26 * sc, sc, sqx, sqy, (p - .5) * .7, 0);
+        requestAnimationFrame(frame);
+      } else if (t < DUR + 230){
+        var p2 = (t - DUR) / 230;
+        if (!thumped){ thumped = true; poofAt(landX, landY, baseSC); }
+        drawPopDog(landX, landY - 26 * baseSC, baseSC, 1.18 - p2 * .18, .84 + p2 * .16, 0, 0);
+        popCv.style.opacity = String(Math.max(0, 1 - p2 * 1.4));
+        requestAnimationFrame(frame);
       } else {
         popCv.style.opacity = "0";
         popCtx.clearRect(0, 0, PW, PH);
-        return;
+        onLanded(landX - cr.left);
       }
-
-      drawPopDog(x, y, sc, sqx, sqy, tilt, tongueT);
-      if (tongueT > .02){
-        var mouthX = x + 2 * sc, mouthY = y - 14 * sc;
-        drawLickSwipe(mouthX, mouthY, sc, tongueT);
-      }
-      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   }
+
+  /* knock ... knock ... then she shoulders the door open */
+  function runDoghouseScene(){
+    var dh = document.getElementById("doghouse");
+    var locket = document.getElementById("locket");
+
+    function reveal(){
+      locket.classList.add("in");
+      document.querySelectorAll(".cotton-name, .cotton-line").forEach(function(el, i){
+        setTimeout(function(){ el.classList.add("in"); }, 220 + i * 200);
+      });
+      setTimeout(function(){ pawsBox.classList.add("go"); }, 700);
+    }
+
+    if (reduced){
+      dh.classList.add("gone");
+      startDog();
+      reveal();
+      return;
+    }
+
+    var knocks = [900, 1500, 2050];
+    knocks.forEach(function(ms){
+      setTimeout(function(){
+        dh.classList.remove("knocking");
+        void dh.offsetWidth;                 // restart the wobble
+        dh.classList.add("knocking");
+        var b = dh.getBoundingClientRect();
+        poofAt(b.left + b.width * .5, b.top + b.height * .97, 1);
+      }, ms);
+    });
+
+    setTimeout(function(){
+      runDogExit(dh, function(atX){
+        startDog(atX);
+        dh.classList.add("gone");
+        setTimeout(reveal, 380);
+      });
+    }, 2600);
+  }
+
+
   /* ================= REVEAL ON SCROLL ================= */
   var io = new IntersectionObserver(function(entries){
     entries.forEach(function(e){
       if (e.isIntersecting){
         e.target.classList.add("in");
-        if (e.target.classList.contains("locket")){
-          pawsBox.classList.add("go");
+        if (e.target.id === "doghouse"){
+          io.unobserve(e.target);
           if (!reduced) { launchRocket(); startFx(); }
+          runDoghouseScene();
         }
         if (e.target.id === "replay"){
           releaseBalloons(16);
@@ -1651,16 +1769,14 @@
       for (var i = 0; i < 5; i++){
         (function(i){ setTimeout(function(){ launchRocket(); }, i * 260); })(i);
       }
-      runPopIntro();
     }, 280);
 
     setTimeout(function(){ gate.classList.add("gone"); }, 1150);
     setTimeout(function(){
       story.classList.add("live");
       musicBtn.classList.add("show");
-      document.querySelectorAll(".rise").forEach(function(el){ io.observe(el); });
+      document.querySelectorAll(".rise:not(.hold)").forEach(function(el){ io.observe(el); });
       growGarden();
-      startDog();
       if (!reduced) startFlies();
     }, 1500);
     setTimeout(function(){ autoFire = false; }, 15000);
