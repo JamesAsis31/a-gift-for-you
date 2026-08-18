@@ -330,6 +330,8 @@
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px) rotate(-2deg)}75%{transform:translateX(7px) rotate(2deg)}}
   @keyframes burst{0%{width:10px;height:10px;opacity:1}100%{width:230vmax;height:230vmax;opacity:0}}
   @keyframes paw{0%,72%,100%{opacity:0;transform:scale(.7)}12%,58%{opacity:1;transform:scale(1)}}
+  #garden .fl{transform-box:view-box;animation:flSway 6s ease-in-out infinite}
+  @keyframes flSway{0%,100%{transform:rotate(-1.7deg)}50%{transform:rotate(1.7deg)}}
   @keyframes riseUp{to{transform:translateY(-135vh) rotate(var(--rot,10deg));opacity:0}}
 
   /* short or landscape phones: the fixed-position garden band and the
@@ -479,6 +481,27 @@
       });
     }
   }
+  /* fireflies drift up out of the garden - they ride the star loop that is
+     already running rather than costing another animation frame */
+  var flies = [], fliesOn = false;
+  function spawnFly(){
+    return { x: Math.random() * sw, y: sh - Math.random() * sh * .18,
+             vx: (Math.random() - .5) * .22, vy: -(Math.random() * .22 + .07),
+             r: Math.random() * 1.5 + .9, a: Math.random() * 6.28,
+             sp: Math.random() * .045 + .022, life: 1,
+             decay: Math.random() * .0022 + .0011 };
+  }
+  function startFlies(){
+    if (fliesOn) return;
+    fliesOn = true;
+    var n = Math.round(Math.min(26, sw / 26));
+    for (var i = 0; i < n; i++){
+      var f = spawnFly();
+      f.y = sh - Math.random() * sh * .75;
+      f.life = Math.random();
+      flies.push(f);
+    }
+  }
   function drawStars(){
     sctx.clearRect(0, 0, sw, sh);
     for (var i = 0; i < stars.length; i++){
@@ -489,6 +512,22 @@
       sctx.fillStyle = "rgba(" + s.hue + "," + o.toFixed(3) + ")";
       sctx.arc(s.x, s.y, s.r, 0, 6.2832);
       sctx.fill();
+    }
+    for (i = 0; i < flies.length; i++){
+      var f = flies[i];
+      f.a += f.sp;
+      f.x += f.vx + Math.sin(f.a * .7) * .18;
+      f.y += f.vy;
+      f.life -= f.decay;
+      if (f.life <= 0 || f.y < -20){ flies[i] = spawnFly(); continue; }
+      var pulse = (.35 + Math.abs(Math.sin(f.a)) * .65) * Math.min(1, f.life * 3);
+      var g = sctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 6);
+      g.addColorStop(0, "rgba(255,236,150," + (pulse * .8).toFixed(3) + ")");
+      g.addColorStop(1, "rgba(255,236,150,0)");
+      sctx.fillStyle = g;
+      sctx.beginPath(); sctx.arc(f.x, f.y, f.r * 6, 0, 6.2832); sctx.fill();
+      sctx.fillStyle = "rgba(255,248,210," + pulse.toFixed(3) + ")";
+      sctx.beginPath(); sctx.arc(f.x, f.y, f.r, 0, 6.2832); sctx.fill();
     }
     requestAnimationFrame(drawStars);
   }
@@ -597,73 +636,183 @@
 
   /* ================= FLOWERS ================= */
   var garden = document.getElementById("garden");
-  var FLOWER_COLS = [
-    ["#ff9ec4", "#e5537f"], ["#ffd88a", "#e8a33c"], ["#fff0f6", "#ffb3d1"],
-    ["#c8a8ff", "#8d5ce0"], ["#ffb3a0", "#ef6a52"], ["#a8e6ff", "#4fa8d8"]
+  /* Each palette runs deep at the petal base to pale at the tip, which is
+     what gives the layered petals their depth once they overlap. */
+  var PETAL_SETS = [
+    { id:"pa", a:"#a8145a", b:"#ff7fae", c:"#ffdcec", k:"#ffd84d", kd:"#d9781a" },
+    { id:"pb", a:"#c4430a", b:"#ff9f45", c:"#ffe9c2", k:"#fff3b0", kd:"#c2620a" },
+    { id:"pc", a:"#5430bd", b:"#a98bfa", c:"#e9e0ff", k:"#ffe066", kd:"#c98a06" },
+    { id:"pd", a:"#bd1f57", b:"#ffa2c0", c:"#fff2f7", k:"#ffe27a", kd:"#d99a20" },
+    { id:"pe", a:"#125fae", b:"#6cc0fb", c:"#ddf0ff", k:"#ffdf6b", kd:"#c98f10" },
+    { id:"pf", a:"#c47c00", b:"#ffd33d", c:"#fff8d6", k:"#ff9f45", kd:"#b23c0c" }
   ];
   var NS = "http://www.w3.org/2000/svg";
   var GW = 0, GH = 0, gardenGrown = false;
 
+  function petalPath(L, W){
+    return "M0,0 C" + (-W) + "," + (-L * .28) + " " + (-W * .8) + "," + (-L * .84) + " 0," + (-L) +
+           " C" + (W * .8) + "," + (-L * .84) + " " + W + "," + (-L * .28) + " 0,0 Z";
+  }
+
+  function gardenDefs(){
+    var s = '<linearGradient id="soil" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#4a8a55"/><stop offset=".3" stop-color="#2f6540"/>' +
+            '<stop offset="1" stop-color="#1c3626"/></linearGradient>' +
+            '<linearGradient id="stemg" x1="0" y1="1" x2="0" y2="0">' +
+            '<stop offset="0" stop-color="#2f7a41"/><stop offset="1" stop-color="#63b56f"/></linearGradient>';
+    for (var i = 0; i < PETAL_SETS.length; i++){
+      var p = PETAL_SETS[i];
+      s += '<linearGradient id="' + p.id + '" x1="0" y1="1" x2="0" y2="0">' +
+             '<stop offset="0" stop-color="' + p.a + '"/>' +
+             '<stop offset=".55" stop-color="' + p.b + '"/>' +
+             '<stop offset="1" stop-color="' + p.c + '"/></linearGradient>' +
+           '<linearGradient id="' + p.id + 'i" x1="0" y1="1" x2="0" y2="0">' +
+             '<stop offset="0" stop-color="' + p.a + '"/>' +
+             '<stop offset="1" stop-color="' + p.b + '"/></linearGradient>' +
+           '<radialGradient id="' + p.id + 'k">' +
+             '<stop offset="0" stop-color="' + p.k + '"/>' +
+             '<stop offset="1" stop-color="' + p.kd + '"/></radialGradient>' +
+           '<radialGradient id="' + p.id + 'g">' +
+             '<stop offset="0" stop-color="' + p.c + '" stop-opacity=".55"/>' +
+             '<stop offset="1" stop-color="' + p.c + '" stop-opacity="0"/></radialGradient>';
+    }
+    return '<defs>' + s + '</defs>';
+  }
+
+  /* A flower is two offset rings of petals plus a stamen crown. The rings
+     unfurl outer-first with a per-petal delay and a rotational twist, so it
+     reads as one spiralling bloom rather than everything popping at once. */
   function makeFlower(x, baseY, scale, delay, instant){
-    var g = document.createElementNS(NS, "g");
-    var cols = pick(FLOWER_COLS);
+    var pal = pick(PETAL_SETS);
     var h = rand(GH * .3, GH * .6) * scale;
     var topY = baseY - h;
     var bend = rand(-26, 26);
+    var hx = x + bend * .6, hy = topY;
+
+    var g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "fl");
+    g.style.transformOrigin = x + "px " + baseY + "px";
+    g.style.animationDuration = rand(4.2, 7.4).toFixed(2) + "s";
+    g.style.animationDelay = "-" + rand(0, 5).toFixed(2) + "s";
 
     var stem = document.createElementNS(NS, "path");
     stem.setAttribute("d", "M" + x + "," + baseY + " Q" + (x + bend) + "," + (baseY - h * .55) +
-                          " " + (x + bend * .6) + "," + topY);
-    stem.setAttribute("stroke", "#4f9d5d");
-    stem.setAttribute("stroke-width", (3.2 * scale).toFixed(2));
+                          " " + hx + "," + topY);
+    stem.setAttribute("stroke", "url(#stemg)");
+    stem.setAttribute("stroke-width", (3.4 * scale).toFixed(2));
     stem.setAttribute("fill", "none");
     stem.setAttribute("stroke-linecap", "round");
-    stem.setAttribute("opacity", ".9");
     var len = h * 1.15;
     stem.setAttribute("stroke-dasharray", len);
     stem.setAttribute("stroke-dashoffset", instant ? 0 : len);
     g.appendChild(stem);
 
-    var leaf = document.createElementNS(NS, "ellipse");
-    leaf.setAttribute("cx", x + bend * .35 + 12 * scale);
-    leaf.setAttribute("cy", baseY - h * .45);
-    leaf.setAttribute("rx", 15 * scale);
-    leaf.setAttribute("ry", 6 * scale);
-    leaf.setAttribute("fill", "#4f9d5d");
-    leaf.setAttribute("opacity", instant ? ".85" : "0");
-    leaf.setAttribute("transform", "rotate(-25 " + (x + bend * .35) + " " + (baseY - h * .45) + ")");
-    g.appendChild(leaf);
+    // two leaves that unfurl off the stem
+    var leaves = [];
+    for (var li = 0; li < 2; li++){
+      var lt = li ? .38 : .62;
+      var lx = x + bend * lt * .9, ly = baseY - h * lt;
+      var dir = li ? 1 : -1;
+      var lw = document.createElementNS(NS, "g");
+      lw.setAttribute("transform", "translate(" + lx + "," + ly + ") rotate(" + (dir * rand(18, 34) - 90 * 0) + ")");
+      var leaf = document.createElementNS(NS, "path");
+      var LL = rand(16, 24) * scale, LW = rand(5.5, 8) * scale;
+      leaf.setAttribute("d", "M0,0 Q" + (LL * .5 * dir) + "," + (-LW) + " " + (LL * dir) + ",0 Q" +
+                             (LL * .5 * dir) + "," + LW + " 0,0 Z");
+      leaf.setAttribute("fill", "#3f8f50");
+      leaf.style.transformOrigin = "0px 0px";
+      leaf.style.transform = instant ? "scale(1)" : "scale(0)";
+      lw.appendChild(leaf);
+      g.appendChild(lw);
+      leaves.push(leaf);
+    }
 
     var head = document.createElementNS(NS, "g");
-    var hx = x + bend * .6, hy = topY;
-    head.setAttribute("transform", "translate(" + hx + "," + hy + ") scale(" + (instant ? 1 : 0) + ")");
-    var petalCount = 7;
-    for (var i = 0; i < petalCount; i++){
-      var pet = document.createElementNS(NS, "ellipse");
-      pet.setAttribute("cx", "0"); pet.setAttribute("cy", -13 * scale);
-      pet.setAttribute("rx", 7.5 * scale); pet.setAttribute("ry", 13 * scale);
-      pet.setAttribute("fill", cols[0]);
-      pet.setAttribute("opacity", ".93");
-      pet.setAttribute("transform", "rotate(" + (360 / petalCount) * i + ")");
-      head.appendChild(pet);
+    head.setAttribute("transform", "translate(" + hx + "," + hy + ")");
+
+    var R = 15 * scale;
+    var glow = document.createElementNS(NS, "circle");
+    glow.setAttribute("r", R * 2.1);
+    glow.setAttribute("fill", "url(#" + pal.id + "g)");
+    glow.setAttribute("opacity", instant ? ".75" : "0");
+    head.appendChild(glow);
+
+    var petals = [];
+    function ring(count, L, W, grad, spin, op){
+      for (var i = 0; i < count; i++){
+        var a = (360 / count) * i + spin;
+        var pet = document.createElementNS(NS, "path");
+        pet.setAttribute("d", petalPath(L, W));
+        pet.setAttribute("fill", grad);
+        pet.setAttribute("opacity", instant ? op : 0);
+        pet.setAttribute("transform", instant
+          ? "rotate(" + a + ") scale(1)"
+          : "rotate(" + (a - 38) + ") scale(.04)");
+        head.appendChild(pet);
+        petals.push({ el: pet, a: a, op: op });
+      }
     }
+    ring(8, R * 1.5, R * .58, "url(#" + pal.id + ")", 0, .95);
+    ring(6, R * 1.0, R * .44, "url(#" + pal.id + "i)", 26, 1);
+
     var core = document.createElementNS(NS, "circle");
-    core.setAttribute("r", 6.5 * scale);
-    core.setAttribute("fill", cols[1]);
+    core.setAttribute("r", R * .36);
+    core.setAttribute("fill", "url(#" + pal.id + "k)");
+    core.style.transformOrigin = "0px 0px";
+    core.style.transform = instant ? "scale(1)" : "scale(0)";
     head.appendChild(core);
+
+    var stamens = [];
+    for (var si = 0; si < 6; si++){
+      var sa = (360 / 6) * si + 15, sr = R * .3;
+      var dot = document.createElementNS(NS, "circle");
+      dot.setAttribute("r", R * .085);
+      dot.setAttribute("cx", Math.cos(sa * Math.PI / 180) * sr);
+      dot.setAttribute("cy", Math.sin(sa * Math.PI / 180) * sr);
+      dot.setAttribute("fill", pal.k);
+      dot.setAttribute("opacity", instant ? ".95" : "0");
+      head.appendChild(dot);
+      stamens.push(dot);
+    }
+
     g.appendChild(head);
     garden.appendChild(g);
     if (instant) return;
 
     setTimeout(function(){
-      stem.style.transition = "stroke-dashoffset 1.5s cubic-bezier(.2,.8,.3,1)";
+      stem.style.transition = "stroke-dashoffset 1.4s cubic-bezier(.2,.8,.3,1)";
       stem.setAttribute("stroke-dashoffset", "0");
+
+      leaves.forEach(function(lf, i){
+        setTimeout(function(){
+          lf.style.transition = "transform .8s cubic-bezier(.2,1.5,.4,1)";
+          lf.style.transform = "scale(1)";
+        }, 420 + i * 160);
+      });
+
       setTimeout(function(){
-        leaf.style.transition = "opacity .7s";
-        leaf.setAttribute("opacity", ".85");
-        head.style.transition = "transform 1.1s cubic-bezier(.2,1.5,.4,1)";
-        head.setAttribute("transform", "translate(" + hx + "," + hy + ") scale(1)");
+        glow.style.transition = "opacity 1.4s ease";
+        glow.setAttribute("opacity", ".75");
       }, 900);
+
+      petals.forEach(function(p, i){
+        setTimeout(function(){
+          p.el.style.transition = "transform .95s cubic-bezier(.2,1.4,.35,1), opacity .5s ease";
+          p.el.setAttribute("transform", "rotate(" + p.a + ") scale(1)");
+          p.el.setAttribute("opacity", p.op);
+        }, 880 + i * 42);
+      });
+
+      setTimeout(function(){
+        core.style.transition = "transform .7s cubic-bezier(.2,1.7,.4,1)";
+        core.style.transform = "scale(1)";
+        stamens.forEach(function(d, i){
+          setTimeout(function(){
+            d.style.transition = "opacity .4s";
+            d.setAttribute("opacity", ".95");
+          }, i * 55);
+        });
+      }, 880 + petals.length * 42 + 60);
     }, delay);
   }
 
@@ -673,12 +822,7 @@
     var r = garden.getBoundingClientRect();
     GW = Math.max(r.width, 1); GH = Math.max(r.height, 1);
     garden.setAttribute("viewBox", "0 0 " + GW + " " + GH);
-    garden.innerHTML =
-      '<defs>' +
-      '<linearGradient id="soil" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#4a8a55"/><stop offset=".3" stop-color="#2f6540"/>' +
-      '<stop offset="1" stop-color="#1c3626"/></linearGradient>' +
-      '</defs>';
+    garden.innerHTML = gardenDefs();
     garden.classList.add("in");
     gardenGrown = true;
 
@@ -730,12 +874,13 @@
     }
 
     // 3. then the flowers bloom through the grass
-    var n = Math.max(14, Math.round(GW / 46));
+    var n = Math.max(13, Math.round(GW / 52));
     for (i = 0; i < n; i++){
-      makeFlower(GW / n * i + rand(-12, 12), gy + rand(2, 9), rand(.55, 1.05),
+      makeFlower(GW / n * i + rand(-12, 12), gy + rand(2, 9), rand(.6, 1.1),
                  1100 + i * (2600 / n) + rand(0, 200), instant);
     }
   }
+
 
   /* ================= PAW PRINTS ================= */
   var pawsBox = document.getElementById("paws");
@@ -854,10 +999,14 @@
     var f = (d - len) / d;
     p.x -= dx * f; p.y -= dy * f;
   }
+  function approach(v, target, rate){ return v + (target - v) * rate; }
 
   var dog = {
     x:0, dir:1, speed:0, gait:0, jumpY:0, jumpV:0,
-    state:"run", timer:0, wag:0,
+    state:"run", timer:0, wag:0, wagFast:0,
+    sit:0, sniff:0, pant:0, tilt:0, perk:0,
+    blink:0, blinkT:90, earTw:0, earTwV:0,
+    target:null, targetT:0,
     shoulder:null, hip:null, head:null, neck:null, legs:[], tail:[]
   };
 
@@ -896,32 +1045,82 @@
     dogReady = true;
   }
 
+  /* pick the next idle behaviour - she sits, sniffs the flowers, looks
+     around or gets a burst of zoomies, so she never loops the same beat */
+  function nextIdle(){
+    var r = Math.random();
+    if (r < .3){ dog.state = "sit";   dog.timer = 200 + Math.random() * 160; }
+    else if (r < .58){ dog.state = "sniff"; dog.timer = 150 + Math.random() * 120; }
+    else { dog.state = "pause"; dog.timer = 90 + Math.random() * 90; }
+  }
+
   function dogStep(){
     var i, l;
     dog.timer--;
 
-    if (dog.state === "run"){
-      dog.speed += (1.6 * SC - dog.speed) * .05;
+    var wantSit = 0, wantSniff = 0, targetSpeed = 0, edge = 62 * SC;
+
+    if (dog.state === "run" || dog.state === "zoom"){
+      var top = dog.state === "zoom" ? 3.1 * SC : 1.6 * SC;
+      targetSpeed = top;
       dog.x += dog.speed * dog.dir;
-      var edge = 62 * SC;
       if ((dog.dir > 0 && dog.x > DW - edge) || (dog.dir < 0 && dog.x < edge)){
-        dog.state = "stop"; dog.timer = 75;
-      } else if (dog.timer < 0 && Math.random() < .004){
-        dog.state = "stop"; dog.timer = 95;
+        dog.state = "pause"; dog.timer = 70;
+      } else if (dog.timer < 0){
+        if (Math.random() < .004) nextIdle();
+        else if (dog.state === "run" && Math.random() < .0016){
+          dog.state = "zoom"; dog.timer = 120 + Math.random() * 100;
+        } else if (dog.state === "zoom" && dog.timer < -60){
+          dog.state = "run"; dog.timer = 150;
+        }
+      }
+    } else if (dog.state === "toTarget"){
+      /* she was called over by a tap */
+      var dx = dog.target - dog.x;
+      dog.dir = dx < 0 ? -1 : 1;
+      targetSpeed = Math.min(2.6 * SC, Math.abs(dx) * .06);
+      dog.x += dog.speed * dog.dir;
+      if (Math.abs(dx) < 12 * SC || dog.timer <= 0){
+        dog.state = "pause"; dog.timer = 130; dog.wagFast = 1;
+        if (dog.jumpY === 0) dog.jumpV = 6.2 * SC;
       }
     } else {
-      dog.speed += (0 - dog.speed) * .12;
-      dog.x += dog.speed * dog.dir;
+      targetSpeed = 0;
       dog.wag = 1;
+      if (dog.state === "sit")   wantSit = 1;
+      if (dog.state === "sniff") wantSniff = 1;
       if (dog.timer <= 0){
-        dog.wag = 0;
+        dog.wag = 0; dog.wagFast = 0;
         var m = 66 * SC;
         if (dog.x > DW - m) dog.dir = -1;
         else if (dog.x < m) dog.dir = 1;
-        else dog.dir = Math.random() < .5 ? -1 : 1;
-        dog.state = "run"; dog.timer = 130;
+        else if (Math.random() < .45) dog.dir = -dog.dir;
+        dog.state = "run"; dog.timer = 150 + Math.random() * 160;
       }
     }
+
+    dog.speed = approach(dog.speed, targetSpeed, targetSpeed > dog.speed ? .05 : .12);
+    dog.sit   = approach(dog.sit, wantSit, .07);
+    dog.sniff = approach(dog.sniff, wantSniff, .08);
+
+    /* panting builds while she runs and eases off while she rests */
+    dog.pant = Math.max(0, Math.min(1, dog.pant + (dog.speed > 1.2 * SC ? .006 : -.008)));
+
+    /* blinking */
+    dog.blinkT--;
+    if (dog.blinkT <= 0){ dog.blinkT = 110 + Math.random() * 190; dog.blink = 1; }
+    dog.blink = Math.max(0, dog.blink - .12);
+
+    /* ear twitch */
+    if (Math.random() < .004) dog.earTwV += rand(.18, .32);
+    dog.earTwV += (0 - dog.earTw) * .18;
+    dog.earTwV *= .8;
+    dog.earTw += dog.earTwV;
+
+    /* curious head tilt while idle */
+    var wantTilt = (dog.state === "sit" && Math.sin(Date.now() * .0011) > .55) ? .22 : 0;
+    dog.tilt = approach(dog.tilt, wantTilt, .05);
+    dog.perk = approach(dog.perk, dog.state === "sit" || dog.state === "pause" ? 1 : 0, .06);
 
     dog.gait = (dog.gait + dog.speed * .026 / SC + 1) % 1;
 
@@ -932,13 +1131,15 @@
     }
 
     /* the body is driven; everything hanging off it is physics */
-    var bob = Math.sin(dog.gait * TAU * 2) * 3.2 * SC;
+    var bounce = dog.state === "zoom" ? 4.6 : 3.2;
+    var bob = Math.sin(dog.gait * TAU * 2) * bounce * SC * Math.min(1, dog.speed / (1.2 * SC));
     var by = GY - 28 * SC + bob - dog.jumpY;
     dog.shoulder.x = dog.x + 11.5 * SC * dog.dir;
-    dog.shoulder.y = by - SC;
+    dog.shoulder.y = by - SC + dog.sniff * 3 * SC;
     dog.hip.x = dog.x - 11.5 * SC * dog.dir;
-    dog.hip.y = by + Math.sin(dog.gait * TAU * 2 + 1.1) * 1.4 * SC;
+    dog.hip.y = by + Math.sin(dog.gait * TAU * 2 + 1.1) * 1.4 * SC + dog.sit * 17 * SC;
 
+    var moving = Math.min(1, dog.speed / (.5 * SC));
     var stride = 13 * SC, lift = 10 * SC;
     for (i = 0; i < dog.legs.length; i++){
       l = dog.legs[i];
@@ -957,6 +1158,11 @@
         tx = restX + (-stride * .5 + sw * stride) * dog.dir;
         ty = GY - lift * Math.sin(sw * Math.PI);
       }
+      /* when she slows to a stop the paws settle flat instead of
+         freezing mid-stride, and tuck under her when she sits */
+      var restPawX = anch.x + (l.front ? 5 : -3) * SC * dog.dir;
+      tx = restPawX + (tx - restPawX) * moving;
+      ty = GY + (ty - GY) * moving;
       l.paw.x += (tx - l.paw.x) * .32;
       l.paw.y += (ty - l.paw.y) * .32;
 
@@ -969,7 +1175,10 @@
 
     /* head springs toward a carry position but bobs under gravity */
     verlet(dog.head, .32 * SC, .9);
-    var htx = dog.shoulder.x + 15 * SC * dog.dir, hty = dog.shoulder.y - 21 * SC;
+    var carryX = 15 * SC + dog.sniff * 7 * SC;
+    var carryY = -21 * SC + dog.sniff * 20 * SC - dog.perk * 2 * SC;
+    var htx = dog.shoulder.x + carryX * dog.dir, hty = dog.shoulder.y + carryY;
+    if (dog.sniff > .05) hty += Math.sin(Date.now() * .014) * 1.6 * SC * dog.sniff;
     dog.head.x += (htx - dog.head.x) * .16;
     dog.head.y += (hty - dog.head.y) * .16;
     pull(dog.shoulder, dog.head, 25 * SC);
@@ -977,13 +1186,15 @@
     dog.neck.y = (dog.shoulder.y + dog.head.y) * .5;
 
     /* plume tail - floppy chain with lift so it arcs over her back */
+    var wagSpeed = dog.wagFast ? .045 : .022;
+    var wagAmp = dog.wagFast ? 2.6 : 1.3;
     var prev = dog.hip;
     for (i = 0; i < dog.tail.length; i++){
       var tp = dog.tail[i];
       verlet(tp, .14 * SC, .93);
       tp.y -= 1.05 * SC;
       tp.x -= dog.dir * .04 * SC;
-      if (dog.wag) tp.x += Math.sin(Date.now() * .022 + i * .8) * 1.3 * SC;
+      if (dog.wag) tp.x += Math.sin(Date.now() * wagSpeed + i * .8) * wagAmp * SC;
       pull(prev, tp, 9.5 * SC);
       prev = tp;
     }
@@ -1043,13 +1254,15 @@
   function drawHead(){
     dctx.save();
     dctx.translate(dog.head.x, dog.head.y);
-    var tilt = Math.max(-.28, Math.min(.28, (dog.head.y - (dog.shoulder.y - 21 * SC)) * .02));
-    dctx.rotate(tilt);
+    var lean = Math.max(-.28, Math.min(.28, (dog.head.y - (dog.shoulder.y - 21 * SC)) * .02));
+    dctx.rotate(lean + dog.tilt * dog.dir + dog.sniff * .5 * dog.dir);
     dctx.scale(dog.dir, 1);
 
-    /* pointed pomeranian ears, floppy with the gait */
-    var flop = Math.sin(dog.gait * TAU * 2) * .13;
-    var ears = [[-8.5, -12, -.42 + flop, 1.12], [8.5, -14, .1 + flop, 1]];
+    /* pointed pomeranian ears - they flop with the gait, perk up when she
+       is alert, and flick independently now and then */
+    var flop = Math.sin(dog.gait * TAU * 2) * .13 * Math.min(1, dog.speed / SC);
+    var perk = -dog.perk * .16;
+    var ears = [[-8.5, -12, -.42 + flop + perk, 1.12], [8.5, -14, .1 + flop + perk + dog.earTw, 1]];
     for (var e = 0; e < ears.length; e++){
       dctx.save();
       dctx.translate(ears[e][0] * SC, ears[e][1] * SC);
@@ -1074,31 +1287,62 @@
 
     dctx.fillStyle = INK;
     dctx.beginPath(); dctx.ellipse(17.2 * SC, 2.6 * SC, 3.2 * SC, 2.6 * SC, 0, 0, TAU); dctx.fill();
+    dctx.fillStyle = "rgba(255,255,255,.5)";
+    dctx.beginPath(); dctx.ellipse(16.4 * SC, 1.6 * SC, 1.1 * SC, .8 * SC, -.3, 0, TAU); dctx.fill();
+
     dctx.strokeStyle = INK; dctx.lineWidth = 1.1 * SC; dctx.lineCap = "round";
     dctx.beginPath();
     dctx.moveTo(16 * SC, 6.2 * SC);
     dctx.quadraticCurveTo(13 * SC, 9.2 * SC, 9.8 * SC, 7.2 * SC);
     dctx.stroke();
+
+    /* tongue - a small happy tip normally, lolling and bobbing when she pants */
+    var pantBob = dog.pant * Math.sin(Date.now() * .019) * 1.6 * SC;
+    var tl = 2.1 + dog.pant * 3.4;
     dctx.fillStyle = "#ff8fae";
     dctx.beginPath();
-    dctx.ellipse(13.2 * SC, 9.4 * SC, 2.6 * SC, 2.1 * SC, .2, 0, TAU);
+    dctx.ellipse(13.2 * SC, (9.4 + dog.pant * 2.6) * SC + pantBob, 2.6 * SC, tl * SC, .2, 0, TAU);
     dctx.fill();
 
-    dctx.fillStyle = INK;
-    dctx.beginPath(); dctx.ellipse(6 * SC, -2.4 * SC, 3.7 * SC, 4.2 * SC, 0, 0, TAU); dctx.fill();
-    dctx.fillStyle = "#fff";
-    dctx.beginPath(); dctx.arc(7.2 * SC, -4 * SC, 1.6 * SC, 0, TAU); dctx.fill();
-    dctx.beginPath(); dctx.arc(4.9 * SC, -.7 * SC, .75 * SC, 0, TAU); dctx.fill();
+    /* eye - squashes shut for a blink */
+    var open = 1 - dog.blink;
+    if (open > .12){
+      dctx.fillStyle = INK;
+      dctx.beginPath();
+      dctx.ellipse(6 * SC, -2.4 * SC, 3.7 * SC, 4.2 * SC * open, 0, 0, TAU);
+      dctx.fill();
+      if (open > .55){
+        dctx.fillStyle = "#fff";
+        dctx.beginPath(); dctx.arc(7.2 * SC, -4 * SC, 1.6 * SC, 0, TAU); dctx.fill();
+        dctx.beginPath(); dctx.arc(4.9 * SC, -.7 * SC, .75 * SC, 0, TAU); dctx.fill();
+      }
+    } else {
+      dctx.strokeStyle = INK; dctx.lineWidth = 1.3 * SC;
+      dctx.beginPath();
+      dctx.moveTo(3 * SC, -2.4 * SC);
+      dctx.quadraticCurveTo(6 * SC, -.4 * SC, 9 * SC, -2.4 * SC);
+      dctx.stroke();
+    }
     dctx.restore();
   }
 
   function drawDog(){
     dctx.clearRect(0, 0, DW, DH);
+
     var sh = 1 - Math.min(dog.jumpY / (30 * SC), .72);
     dctx.fillStyle = "rgba(16,5,22," + (.32 * sh).toFixed(3) + ")";
     dctx.beginPath();
     dctx.ellipse(dog.x, GY + 4 * SC, 26 * SC * sh, 4.6 * SC * sh, 0, 0, TAU);
     dctx.fill();
+
+    /* soft warm glow so she reads against the night garden */
+    var cx = (dog.shoulder.x + dog.hip.x) * .5, cy = (dog.shoulder.y + dog.hip.y) * .5 - 6 * SC;
+    var gr = dctx.createRadialGradient(cx, cy, 4 * SC, cx, cy, 46 * SC);
+    gr.addColorStop(0, "rgba(255,231,199,.28)");
+    gr.addColorStop(1, "rgba(255,231,199,0)");
+    dctx.fillStyle = gr;
+    dctx.beginPath(); dctx.arc(cx, cy, 46 * SC, 0, TAU); dctx.fill();
+
     drawLeg(dog.legs[0], FUR_DEEP);
     drawLeg(dog.legs[1], FUR_DEEP);
     drawBody();
@@ -1131,6 +1375,16 @@
     }
     startFx();
   }
+  /* tap anywhere in the garden and she comes running to that spot */
+  function callCotton(px){
+    if (!dogReady) return;
+    dog.target = Math.max(40 * SC, Math.min(DW - 40 * SC, px));
+    dog.state = "toTarget";
+    dog.timer = 240;
+    dog.wagFast = 1;
+    dog.sit = 0; dog.sniff = 0;
+  }
+
 
   /* ================= POP OUT OF THE BOX + LICK THE SCREEN =================
      A one-shot hero animation, fully self-contained (its own canvas, its
@@ -1407,6 +1661,7 @@
       document.querySelectorAll(".rise").forEach(function(el){ io.observe(el); });
       growGarden();
       startDog();
+      if (!reduced) startFlies();
     }, 1500);
     setTimeout(function(){ autoFire = false; }, 15000);
   }
@@ -1420,9 +1675,15 @@
     if (e.target.closest("#music") || e.target.closest("#replay")) return;
     if (dogReady){
       var dr = dogCv.getBoundingClientRect();
-      if (e.clientY > dr.top && Math.abs((e.clientX - dr.left) - dog.x) < 48 * SC){
-        if (dog.jumpY === 0) dog.jumpV = 7.6 * SC;
-        heartPop(e.clientX, e.clientY);
+      if (e.clientY > dr.top){
+        var lx = e.clientX - dr.left;
+        if (Math.abs(lx - dog.x) < 48 * SC){
+          if (dog.jumpY === 0) dog.jumpV = 7.6 * SC;
+          dog.wagFast = 1;
+          heartPop(e.clientX, e.clientY);
+        } else {
+          callCotton(lx);
+        }
         return;
       }
     }
