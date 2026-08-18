@@ -293,6 +293,8 @@
   }
   .replay:hover{background:rgba(255,214,150,.16)}
 
+  #dogPop{position:fixed;inset:0;width:100%;height:100%;z-index:25;pointer-events:none;opacity:0}
+
   #balloons{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden}
   .balloon{position:absolute;bottom:-24vh;width:44px;aspect-ratio:1/1.2;border-radius:50% 50% 48% 48%/46% 46% 56% 56%;opacity:.85}
   .balloon::after{content:"";position:absolute;left:50%;top:99%;width:1px;height:70px;background:linear-gradient(180deg,rgba(255,255,255,.5),transparent)}
@@ -371,6 +373,7 @@
 <canvas id="fx"></canvas>
 <svg id="garden" viewBox="0 0 1000 300" preserveAspectRatio="none"></svg>
 <canvas id="cottonRun"></canvas>
+<canvas id="dogPop"></canvas>
 <div id="balloons"></div>
 
 <div id="music" class="off" title="Music">&#9834;</div>
@@ -1129,6 +1132,238 @@
     startFx();
   }
 
+  /* ================= POP OUT OF THE BOX + LICK THE SCREEN =================
+     A one-shot hero animation, fully self-contained (its own canvas, its
+     own pose state) so it can never collide with the garden-running
+     Cotton's state even though the two can briefly overlap in time. */
+  var popCv = document.getElementById("dogPop"), popCtx = popCv.getContext("2d");
+  var PW = 0, PH = 0;
+  function popResize(){ var d = sizeCanvas(popCv, popCtx); PW = d[0]; PH = d[1]; }
+  popResize();
+
+  function fluffPop(cx, cy, rx, ry, ang, bumps, amp, seed){
+    popCtx.beginPath();
+    for (var i = 0; i <= 40; i++){
+      var a = i / 40 * TAU;
+      var r = 1 + Math.sin(a * bumps + seed) * amp;
+      var x = Math.cos(a) * rx * r, y = Math.sin(a) * ry * r;
+      var xr = x * Math.cos(ang) - y * Math.sin(ang), yr = x * Math.sin(ang) + y * Math.cos(ang);
+      if (i === 0) popCtx.moveTo(cx + xr, cy + yr); else popCtx.lineTo(cx + xr, cy + yr);
+    }
+    popCtx.closePath();
+  }
+
+  function poofAt(x, y, sc){
+    for (var i = 0; i < 8; i++){
+      parts.push({ x:x + rand(-10, 10) * sc, y:y + rand(-2, 6) * sc,
+                   vx:rand(-1.8, 1.8), vy:rand(-1.4, -.2),
+                   life:1, decay:.05, col:"255,250,244", size:rand(2, 4.2) * sc, grav:.01 });
+    }
+    startFx();
+  }
+
+  /* body + head drawn as one hero-scale pose, reusing the same fur
+     palette and face as the garden dog but simplified for a close-up */
+  function drawPopDog(x, y, sc, sqx, sqy, tilt, tongueT){
+    var s = sc;
+    popCtx.save();
+    popCtx.translate(x, y);
+    popCtx.rotate(tilt);
+    popCtx.scale(s * sqx, s * sqy);
+
+    /* shadow */
+    popCtx.fillStyle = "rgba(16,5,22,.28)";
+    popCtx.beginPath();
+    popCtx.ellipse(0, 30, 24, 6, 0, 0, TAU);
+    popCtx.fill();
+
+    /* tail, low behind the body */
+    popCtx.fillStyle = FUR_MID;
+    fluffPop(-16, 6, 11, 11, .3, 7, .17, 1);
+    popCtx.fill();
+    popCtx.fillStyle = FUR;
+    fluffPop(-19, 3, 9.5, 9.5, .3, 7, .17, 2);
+    popCtx.fill();
+
+    /* stubby back legs */
+    popCtx.fillStyle = FUR_DEEP;
+    popCtx.beginPath(); popCtx.ellipse(-10, 24, 6, 8, 0, 0, TAU); popCtx.fill();
+    popCtx.beginPath(); popCtx.ellipse(9, 25, 6, 8, 0, 0, TAU); popCtx.fill();
+
+    /* body */
+    popCtx.fillStyle = FUR_MID;
+    fluffPop(0, 8, 23, 19, 0, 9, .09, .7); popCtx.fill();
+    popCtx.fillStyle = FUR;
+    fluffPop(0, 4, 21.5, 17.5, 0, 9, .085, 2.2); popCtx.fill();
+
+    /* front paws */
+    popCtx.fillStyle = FUR;
+    popCtx.beginPath(); popCtx.ellipse(-13, 27, 6.5, 8.5, 0, 0, TAU); popCtx.fill();
+    popCtx.beginPath(); popCtx.ellipse(13, 27, 6.5, 8.5, 0, 0, TAU); popCtx.fill();
+
+    /* neck ruff + head */
+    popCtx.fillStyle = FUR;
+    fluffPop(0, -12, 15, 14, 0, 8, .13, 3.1); popCtx.fill();
+
+    popCtx.save();
+    popCtx.translate(0, -26);
+
+    var earFlop = Math.sin(Date.now() * .012) * .1;
+    var ears = [[-9, -13, -.4 + earFlop, 1.1], [9, -14.5, .28 - earFlop, 1]];
+    for (var e = 0; e < ears.length; e++){
+      popCtx.save();
+      popCtx.translate(ears[e][0], ears[e][1]);
+      popCtx.rotate(ears[e][2]); popCtx.scale(ears[e][3], ears[e][3]);
+      popCtx.fillStyle = e === 0 ? "#f2e8f0" : FUR;
+      popCtx.beginPath();
+      popCtx.moveTo(0, 5); popCtx.lineTo(-6.5, -13); popCtx.lineTo(8, -3);
+      popCtx.closePath(); popCtx.fill();
+      popCtx.fillStyle = PINK;
+      popCtx.beginPath();
+      popCtx.moveTo(.4, 2.6); popCtx.lineTo(-3.7, -8.2); popCtx.lineTo(4.4, -2.6);
+      popCtx.closePath(); popCtx.fill();
+      popCtx.restore();
+    }
+
+    popCtx.fillStyle = FUR;
+    fluffPop(0, 0, 18.5, 17, 0, 8, .1, 1.4); popCtx.fill();
+    popCtx.beginPath(); popCtx.ellipse(0, 8, 10.5, 7.4, 0, 0, TAU); popCtx.fill();
+
+    popCtx.fillStyle = "rgba(242,150,180,.55)";
+    popCtx.beginPath(); popCtx.ellipse(-13, 10, 5, 3.2, 0, 0, TAU); popCtx.fill();
+    popCtx.beginPath(); popCtx.ellipse(13, 10, 5, 3.2, 0, 0, TAU); popCtx.fill();
+
+    popCtx.fillStyle = INK;
+    popCtx.beginPath(); popCtx.ellipse(0, 6.6, 3.6, 2.9, 0, 0, TAU); popCtx.fill();
+
+    /* big shiny eyes */
+    for (var ex = -8, k = 0; k < 2; k++, ex = 8){
+      popCtx.fillStyle = INK;
+      popCtx.beginPath(); popCtx.ellipse(ex, -3.2, 4.2, 4.8, 0, 0, TAU); popCtx.fill();
+      popCtx.fillStyle = "#fff";
+      popCtx.beginPath(); popCtx.arc(ex + 1.4, -5, 1.8, 0, TAU); popCtx.fill();
+      popCtx.beginPath(); popCtx.arc(ex - 1.2, -1.2, .85, 0, TAU); popCtx.fill();
+    }
+
+    /* open happy mouth, tongue lolls out and grows into the lick */
+    popCtx.fillStyle = "#7a3548";
+    popCtx.beginPath(); popCtx.ellipse(0, 12.5, 6 + tongueT * 1.5, 4.5 + tongueT * 2, 0, 0, Math.PI, false);
+    popCtx.fill();
+    popCtx.fillStyle = "#ff8fae";
+    popCtx.beginPath();
+    popCtx.ellipse(0, 12 + tongueT * 3, 4.4, 3.4 + tongueT * 3.5, 0, 0, TAU);
+    popCtx.fill();
+
+    popCtx.restore();
+    popCtx.restore();
+  }
+
+  /* the big cartoon tongue swipe that "licks the screen" - grown by
+     sampling a quadratic curve up to the current progress, so it
+     reads as one continuous swoosh rather than a static shape */
+  function drawLickSwipe(mouthX, mouthY, screenSC, t){
+    var ctrl = { x: PW * .52, y: PH * .16 };
+    var end  = { x: PW * .9,  y: PH * .04 };
+    var reach = Math.min(1, t * 1.18);
+    var steps = 26, pts = [];
+    for (var i = 0; i <= steps; i++){
+      var q = (i / steps) * reach;
+      var ix = (1 - q) * (1 - q) * mouthX + 2 * (1 - q) * q * ctrl.x + q * q * end.x;
+      var iy = (1 - q) * (1 - q) * mouthY + 2 * (1 - q) * q * ctrl.y + q * q * end.y;
+      pts.push([ix, iy]);
+    }
+    if (pts.length < 2) return pts[0] || [mouthX, mouthY];
+
+    var width = Math.min(PW, PH) * (.16 + .1 * Math.sin(Math.min(t, 1) * Math.PI));
+    popCtx.save();
+    popCtx.globalAlpha = .5;
+    popCtx.strokeStyle = "#ff9dc0";
+    popCtx.lineCap = "round"; popCtx.lineJoin = "round";
+    popCtx.lineWidth = width;
+    popCtx.beginPath();
+    popCtx.moveTo(pts[0][0], pts[0][1]);
+    for (i = 1; i < pts.length; i++) popCtx.lineTo(pts[i][0], pts[i][1]);
+    popCtx.stroke();
+
+    popCtx.globalAlpha = .28;
+    popCtx.strokeStyle = "#fff0f6";
+    popCtx.lineWidth = width * .4;
+    popCtx.stroke();
+    popCtx.restore();
+
+    var tip = pts[pts.length - 1];
+    var glow = popCtx.createRadialGradient(tip[0], tip[1], 0, tip[0], tip[1], width * .9);
+    glow.addColorStop(0, "rgba(255,244,250,.55)");
+    glow.addColorStop(1, "rgba(255,244,250,0)");
+    popCtx.save();
+    popCtx.fillStyle = glow;
+    popCtx.beginPath(); popCtx.arc(tip[0], tip[1], width * .9, 0, TAU); popCtx.fill();
+    popCtx.restore();
+    return tip;
+  }
+
+  function runPopIntro(){
+    if (reduced) return;
+    popResize();
+    var boxRect = document.getElementById("boxStage").getBoundingClientRect();
+    var startX = boxRect.left + boxRect.width * .5;
+    var startY = boxRect.top + boxRect.height * .35;
+    var landX = PW * .5;
+    var landY = Math.min(PH * .6, startY + PH * .26);
+    var baseSC = Math.max(1.05, Math.min(2.5, PW / 340));
+
+    popCv.style.opacity = "1";
+    var t0 = null, poofed = false, licked1 = false, licked2 = false;
+
+    function frame(now){
+      if (t0 === null) t0 = now;
+      var t = now - t0;
+      popCtx.clearRect(0, 0, PW, PH);
+
+      var x, y, sc = baseSC, sqx = 1, sqy = 1, tilt = 0, tongueT = 0;
+
+      if (t < 550){
+        var p = t / 550, e = p < .5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
+        var arc = Math.sin(p * Math.PI);
+        x = startX + (landX - startX) * e;
+        y = startY + (landY - startY) * e - arc * PH * .2;
+        sc = baseSC * (.5 + .55 * e);
+        sqy = 1 - arc * .16; sqx = 1 + arc * .1;
+        tilt = (p - .5) * .5;
+      } else if (t < 700){
+        var p2 = (t - 550) / 150;
+        x = landX; y = landY; sc = baseSC;
+        sqy = .8 + p2 * .2; sqx = 1.2 - p2 * .2;
+        if (!poofed){ poofed = true; poofAt(landX, landY + 28 * baseSC, baseSC); }
+      } else if (t < 1050){
+        var p3 = (t - 700) / 350;
+        x = landX; y = landY - Math.abs(Math.sin(p3 * Math.PI * 2)) * PH * .015;
+        tilt = Math.sin(p3 * Math.PI * 2) * .06;
+      } else if (t < 1900){
+        var p4 = (t - 1050) / 850;
+        x = landX; y = landY; tilt = -.14;
+        tongueT = Math.sin(Math.min(p4, 1) * Math.PI);
+        if (!licked1 && p4 > .18){ licked1 = true; heartPop(landX - 40 * baseSC, landY - 60 * baseSC); }
+        if (!licked2 && p4 > .55){ licked2 = true; heartPop(landX + 50 * baseSC, landY - 90 * baseSC); }
+      } else if (t < 2350){
+        var p5 = (t - 1900) / 450;
+        x = landX; y = landY; sc = baseSC * (1 - p5 * .05);
+        popCv.style.opacity = String(Math.max(0, 1 - p5));
+      } else {
+        popCv.style.opacity = "0";
+        popCtx.clearRect(0, 0, PW, PH);
+        return;
+      }
+
+      drawPopDog(x, y, sc, sqx, sqy, tilt, tongueT);
+      if (tongueT > .02){
+        var mouthX = x + 2 * sc, mouthY = y - 14 * sc;
+        drawLickSwipe(mouthX, mouthY, sc, tongueT);
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
   /* ================= REVEAL ON SCROLL ================= */
   var io = new IntersectionObserver(function(entries){
     entries.forEach(function(e){
@@ -1162,6 +1397,7 @@
       for (var i = 0; i < 5; i++){
         (function(i){ setTimeout(function(){ launchRocket(); }, i * 260); })(i);
       }
+      runPopIntro();
     }, 280);
 
     setTimeout(function(){ gate.classList.add("gone"); }, 1150);
