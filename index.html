@@ -20,15 +20,19 @@
     --gold-deep:#e8b45c;
     --cream:#fff6ea;
     --ink:#3a2430;
+    --garden-h:min(32vh,240px);
+    --garden-reserve:min(19vh,152px);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html{scroll-behavior:smooth}
+  html{scroll-behavior:smooth;overflow-x:hidden;width:100%}
   body{
     font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
     background:var(--night-1);
     color:var(--cream);
     overflow-x:hidden;
+    width:100%;
     min-height:100vh;
+    position:relative;
   }
 
   /* ---------- background ---------- */
@@ -151,7 +155,7 @@
   .scene{
     position:relative;min-height:100vh;min-height:100svh;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
-    padding:clamp(40px,7vh,80px) 22px calc(clamp(40px,7vh,80px) + min(19vh,152px));
+    padding:clamp(40px,7vh,80px) 22px calc(clamp(40px,7vh,80px) + var(--garden-reserve));
     text-align:center;
   }
   .scene.roomy{padding-bottom:clamp(40px,7vh,80px)}
@@ -179,8 +183,8 @@
   }
   .hero-sub{margin-top:1.4em;font-size:clamp(.9rem,3.6vw,1.1rem);opacity:.82;letter-spacing:.05em;max-width:34ch}
 
-  #garden{position:fixed;left:0;right:0;bottom:0;width:100%;height:min(32vh,240px);z-index:3;pointer-events:none;opacity:0;transition:opacity 2s}
-  #cottonRun{position:fixed;left:0;bottom:0;width:100%;height:min(32vh,240px);z-index:4;pointer-events:none;opacity:0;transition:opacity 1.4s}
+  #garden{position:fixed;left:0;right:0;bottom:0;width:100%;height:var(--garden-h);z-index:3;pointer-events:none;opacity:0;transition:opacity 2s}
+  #cottonRun{position:fixed;left:0;bottom:0;width:100%;height:var(--garden-h);z-index:4;pointer-events:none;opacity:0;transition:opacity 1.4s}
   #cottonRun.in{opacity:1}
   #garden.in{opacity:1}
 
@@ -304,7 +308,7 @@
   #music.off{opacity:.42}
 
   .scroll-cue{
-    position:absolute;bottom:calc(min(19vh,152px) + 34px);left:0;right:0;
+    position:absolute;bottom:calc(var(--garden-reserve) + 34px);left:0;right:0;
     font-size:.66rem;letter-spacing:.32em;text-transform:uppercase;color:var(--gold);
     opacity:.6;animation:bob 2.4s ease-in-out infinite;
   }
@@ -325,6 +329,35 @@
   @keyframes burst{0%{width:10px;height:10px;opacity:1}100%{width:230vmax;height:230vmax;opacity:0}}
   @keyframes paw{0%,72%,100%{opacity:0;transform:scale(.7)}12%,58%{opacity:1;transform:scale(1)}}
   @keyframes riseUp{to{transform:translateY(-135vh) rotate(var(--rot,10deg));opacity:0}}
+
+  /* short or landscape phones: the fixed-position garden band and the
+     flex-centered hero/finale text have too little vertical room to
+     both fit without colliding, so shrink and tighten for this range */
+  @media (max-height:560px){
+    :root{
+      --garden-h:clamp(90px,20vh,120px);
+      --garden-reserve:clamp(90px,20vh,120px);
+    }
+    .scene{padding-top:clamp(16px,4vh,32px);padding-bottom:calc(clamp(16px,4vh,32px) + var(--garden-reserve))}
+    .scene.roomy{padding-bottom:clamp(16px,4vh,32px)}
+    .scroll-cue{display:none}
+
+    .eyebrow{margin-bottom:.5em}
+    h1.big{font-size:clamp(1.7rem,7vw,3rem)}
+    .hero-name{margin-top:.25em;font-size:clamp(1.05rem,4.4vw,1.7rem)}
+    .hero-sub{margin-top:.6em}
+
+    .locket{width:min(30vw,130px)}
+    .cotton-name{margin-top:.35em;font-size:clamp(1.3rem,5.5vw,2rem)}
+    .cotton-line{margin-top:.3em}
+    .paws{margin-top:8px;height:30px}
+
+    .finale-word{font-size:clamp(1.3rem,6vw,2.2rem)}
+    .from{margin-top:.9em}
+    .from-who{margin-top:.2em;font-size:clamp(1.1rem,5vw,1.8rem)}
+    .hearts{margin-top:.7em}
+    .replay{margin-top:1.1em;padding:10px 24px}
+  }
 
   @media (prefers-reduced-motion:reduce){
     *{animation-duration:.01ms !important;animation-iteration-count:1 !important}
@@ -392,7 +425,7 @@
       <div class="eyebrow rise" style="position:relative">And someone who never really left</div>
       <div class="locket rise">
         <div class="locket-inner">
-          <img src="assets/cotton.jpg" alt="Cotton, a little white dog resting on her red bed">
+          <img src="assets/cotton2.jpg" alt="Cotton, a little white dog resting on her red bed">
           <div class="shine"></div>
           <div class="vig"></div>
         </div>
@@ -830,7 +863,10 @@
     DW = Math.max(r.width, 1); DH = Math.max(r.height, 1);
     dogCv.width = DW * dpr; dogCv.height = DH * dpr;
     dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    SC = Math.max(.75, Math.min(1.35, DW / 370));
+    /* also cap by canvas height so she never scales taller than the
+       garden band she runs in - head and ears reach about 98 * SC
+       above the paw line, so DH must be at least that tall */
+    SC = Math.max(.55, Math.min(1.35, DW / 370, DH / 105));
     GY = DH - 22 * SC;
     if (dogReady) dog.x = Math.max(50 * SC, Math.min(DW - 50 * SC, dog.x));
   }
