@@ -179,7 +179,7 @@
   }
   .hero-sub{margin-top:1.4em;font-size:clamp(.9rem,3.6vw,1.1rem);opacity:.82;letter-spacing:.05em;max-width:34ch}
 
-  #garden{position:fixed;left:0;right:0;bottom:0;height:min(32vh,240px);z-index:3;pointer-events:none;opacity:0;transition:opacity 2s}
+  #garden{position:fixed;left:0;right:0;bottom:0;width:100%;height:min(32vh,240px);z-index:3;pointer-events:none;opacity:0;transition:opacity 2s}
   #cottonRun{position:fixed;left:0;bottom:0;width:100%;height:min(32vh,240px);z-index:4;pointer-events:none;opacity:0;transition:opacity 1.4s}
   #cottonRun.in{opacity:1}
   #garden.in{opacity:1}
@@ -566,17 +566,18 @@
     ["#c8a8ff", "#8d5ce0"], ["#ffb3a0", "#ef6a52"], ["#a8e6ff", "#4fa8d8"]
   ];
   var NS = "http://www.w3.org/2000/svg";
+  var GW = 0, GH = 0, gardenGrown = false;
 
-  function makeFlower(x, scale, delay){
+  function makeFlower(x, baseY, scale, delay, instant){
     var g = document.createElementNS(NS, "g");
     var cols = pick(FLOWER_COLS);
-    var h = rand(90, 170) * scale;
-    var baseY = 266;
+    var h = rand(GH * .3, GH * .6) * scale;
     var topY = baseY - h;
     var bend = rand(-26, 26);
 
     var stem = document.createElementNS(NS, "path");
-    stem.setAttribute("d", "M" + x + "," + baseY + " Q" + (x + bend) + "," + (baseY - h * .55) + " " + (x + bend * .6) + "," + topY);
+    stem.setAttribute("d", "M" + x + "," + baseY + " Q" + (x + bend) + "," + (baseY - h * .55) +
+                          " " + (x + bend * .6) + "," + topY);
     stem.setAttribute("stroke", "#4f9d5d");
     stem.setAttribute("stroke-width", (3.2 * scale).toFixed(2));
     stem.setAttribute("fill", "none");
@@ -584,8 +585,7 @@
     stem.setAttribute("opacity", ".9");
     var len = h * 1.15;
     stem.setAttribute("stroke-dasharray", len);
-    stem.setAttribute("stroke-dashoffset", len);
-    stem.style.animation = "none";
+    stem.setAttribute("stroke-dashoffset", instant ? 0 : len);
     g.appendChild(stem);
 
     var leaf = document.createElementNS(NS, "ellipse");
@@ -594,22 +594,21 @@
     leaf.setAttribute("rx", 15 * scale);
     leaf.setAttribute("ry", 6 * scale);
     leaf.setAttribute("fill", "#4f9d5d");
-    leaf.setAttribute("opacity", "0");
+    leaf.setAttribute("opacity", instant ? ".85" : "0");
     leaf.setAttribute("transform", "rotate(-25 " + (x + bend * .35) + " " + (baseY - h * .45) + ")");
     g.appendChild(leaf);
 
     var head = document.createElementNS(NS, "g");
     var hx = x + bend * .6, hy = topY;
-    head.setAttribute("transform", "translate(" + hx + "," + hy + ") scale(0)");
+    head.setAttribute("transform", "translate(" + hx + "," + hy + ") scale(" + (instant ? 1 : 0) + ")");
     var petalCount = 7;
     for (var i = 0; i < petalCount; i++){
       var pet = document.createElementNS(NS, "ellipse");
-      var a = (360 / petalCount) * i;
       pet.setAttribute("cx", "0"); pet.setAttribute("cy", -13 * scale);
       pet.setAttribute("rx", 7.5 * scale); pet.setAttribute("ry", 13 * scale);
       pet.setAttribute("fill", cols[0]);
       pet.setAttribute("opacity", ".93");
-      pet.setAttribute("transform", "rotate(" + a + ")");
+      pet.setAttribute("transform", "rotate(" + (360 / petalCount) * i + ")");
       head.appendChild(pet);
     }
     var core = document.createElementNS(NS, "circle");
@@ -617,8 +616,8 @@
     core.setAttribute("fill", cols[1]);
     head.appendChild(core);
     g.appendChild(head);
-
     garden.appendChild(g);
+    if (instant) return;
 
     setTimeout(function(){
       stem.style.transition = "stroke-dashoffset 1.5s cubic-bezier(.2,.8,.3,1)";
@@ -632,7 +631,12 @@
     }, delay);
   }
 
-  function growGarden(){
+  /* The garden is drawn in real pixel coordinates, so nothing stretches and
+     the density scales with however wide the screen actually is. */
+  function growGarden(instant){
+    var r = garden.getBoundingClientRect();
+    GW = Math.max(r.width, 1); GH = Math.max(r.height, 1);
+    garden.setAttribute("viewBox", "0 0 " + GW + " " + GH);
     garden.innerHTML =
       '<defs>' +
       '<linearGradient id="soil" x1="0" y1="0" x2="0" y2="1">' +
@@ -640,47 +644,60 @@
       '<stop offset="1" stop-color="#1c3626"/></linearGradient>' +
       '</defs>';
     garden.classList.add("in");
+    gardenGrown = true;
+
+    var gy = GH - Math.max(26, GH * .13);   // grass line
+    var i;
 
     // 1. the ground itself rises into place
+    var d = "M0," + GH + " L0," + gy;
+    var waves = Math.max(6, Math.round(GW / 130));
+    for (i = 1; i <= waves; i++){
+      var wx = GW / waves * i, wy = gy + (i % 2 ? 7 : -6);
+      d += " Q" + (wx - GW / waves * .5) + "," + wy + " " + wx + "," + gy;
+    }
+    d += " L" + GW + "," + GH + " Z";
     var soil = document.createElementNS(NS, "path");
-    soil.setAttribute("d", "M0,300 L0,270 Q62,261 125,268 Q188,275 250,266 Q312,258 375,266 " +
-      "Q438,274 500,267 Q562,260 625,267 Q688,274 750,265 Q812,257 875,266 Q938,274 1000,268 L1000,300 Z");
+    soil.setAttribute("d", d);
     soil.setAttribute("fill", "url(#soil)");
-    soil.setAttribute("transform", "translate(0,46)");
+    soil.setAttribute("transform", instant ? "translate(0,0)" : "translate(0," + (GH * .2) + ")");
     garden.appendChild(soil);
-    setTimeout(function(){
+    if (!instant) setTimeout(function(){
       soil.style.transition = "transform 1.4s cubic-bezier(.2,.8,.3,1)";
       soil.setAttribute("transform", "translate(0,0)");
     }, 60);
 
-    // 2. grass sprouts out of it in a wave
-    var blades = 84;
-    for (var i = 0; i < blades; i++){
+    // 2. grass sprouts out of it in a wave, right across the page
+    var blades = Math.max(40, Math.round(GW / 8));
+    for (i = 0; i < blades; i++){
       (function(i){
-        var x = (1000 / blades) * i + rand(-5, 5);
-        var h = rand(15, 44), bend = rand(-13, 13), yb = 268;
+        var x = GW / blades * i + rand(-4, 4);
+        var bh = rand(GH * .07, GH * .2), bend = rand(-11, 11);
+        var yb = gy + rand(0, 8);
         var b = document.createElementNS(NS, "path");
-        b.setAttribute("d", "M" + x + "," + yb + " Q" + (x + bend * .4) + "," + (yb - h * .6) +
-                            " " + (x + bend) + "," + (yb - h));
+        b.setAttribute("d", "M" + x + "," + yb + " Q" + (x + bend * .4) + "," + (yb - bh * .6) +
+                            " " + (x + bend) + "," + (yb - bh));
         b.setAttribute("stroke", Math.random() < .5 ? "#57a862" : "#3f8a4e");
-        b.setAttribute("stroke-width", rand(1.7, 3.1).toFixed(2));
+        b.setAttribute("stroke-width", rand(1.8, 3.4).toFixed(2));
         b.setAttribute("stroke-linecap", "round");
         b.setAttribute("fill", "none");
-        var len = h * 1.35;
-        b.setAttribute("stroke-dasharray", len);
-        b.setAttribute("stroke-dashoffset", len);
+        var bl = bh * 1.35;
+        b.setAttribute("stroke-dasharray", bl);
+        b.setAttribute("stroke-dashoffset", instant ? 0 : bl);
         garden.appendChild(b);
+        if (instant) return;
         setTimeout(function(){
           b.style.transition = "stroke-dashoffset .9s cubic-bezier(.2,.8,.3,1)";
           b.setAttribute("stroke-dashoffset", "0");
-        }, 420 + i * 10 + rand(0, 140));
+        }, 420 + i * (900 / blades) + rand(0, 140));
       })(i);
     }
 
     // 3. then the flowers bloom through the grass
-    var n = 22;
-    for (var j = 0; j < n; j++){
-      makeFlower((1000 / n) * j + rand(-16, 16), rand(.55, 1.05), 1100 + j * 120 + rand(0, 200));
+    var n = Math.max(14, Math.round(GW / 46));
+    for (i = 0; i < n; i++){
+      makeFlower(GW / n * i + rand(-12, 12), gy + rand(2, 9), rand(.55, 1.05),
+                 1100 + i * (2600 / n) + rand(0, 200), instant);
     }
   }
 
@@ -813,17 +830,17 @@
     DW = Math.max(r.width, 1); DH = Math.max(r.height, 1);
     dogCv.width = DW * dpr; dogCv.height = DH * dpr;
     dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    SC = Math.max(.68, Math.min(1.2, DW / 400));
+    SC = Math.max(.75, Math.min(1.35, DW / 370));
     GY = DH - 22 * SC;
     if (dogReady) dog.x = Math.max(50 * SC, Math.min(DW - 50 * SC, dog.x));
   }
 
   function dogInit(){
     dogResize();
-    var by = GY - 33 * SC;
+    var by = GY - 28 * SC;
     dog.x = DW * .28; dog.dir = 1;
-    dog.shoulder = P(dog.x + 13.5 * SC, by);
-    dog.hip      = P(dog.x - 13.5 * SC, by);
+    dog.shoulder = P(dog.x + 11.5 * SC, by);
+    dog.hip      = P(dog.x - 11.5 * SC, by);
     dog.neck     = P(dog.x + 24 * SC, by - 11 * SC);
     dog.head     = P(dog.x + 31 * SC, by - 19 * SC);
     dog.legs = [];
@@ -832,7 +849,7 @@
     for (var i = 0; i < spec.length; i++){
       var a = spec[i][0] ? dog.shoulder : dog.hip;
       dog.legs.push({ front: spec[i][0], off: spec[i][1],
-                      knee: P(a.x, a.y + 16 * SC), paw: P(a.x, GY) });
+                      knee: P(a.x, a.y + 13 * SC), paw: P(a.x, GY) });
     }
     dog.tail = [ P(dog.hip.x - 6 * SC,  dog.hip.y - 9 * SC),
                  P(dog.hip.x - 10 * SC, dog.hip.y - 18 * SC),
@@ -876,14 +893,14 @@
     }
 
     /* the body is driven; everything hanging off it is physics */
-    var bob = Math.sin(dog.gait * TAU * 2) * 2.2 * SC;
-    var by = GY - 33 * SC + bob - dog.jumpY;
-    dog.shoulder.x = dog.x + 13.5 * SC * dog.dir;
+    var bob = Math.sin(dog.gait * TAU * 2) * 3.2 * SC;
+    var by = GY - 28 * SC + bob - dog.jumpY;
+    dog.shoulder.x = dog.x + 11.5 * SC * dog.dir;
     dog.shoulder.y = by - SC;
-    dog.hip.x = dog.x - 13.5 * SC * dog.dir;
+    dog.hip.x = dog.x - 11.5 * SC * dog.dir;
     dog.hip.y = by + Math.sin(dog.gait * TAU * 2 + 1.1) * 1.4 * SC;
 
-    var stride = 16 * SC, lift = 12 * SC;
+    var stride = 13 * SC, lift = 10 * SC;
     for (i = 0; i < dog.legs.length; i++){
       l = dog.legs[i];
       var anch = l.front ? dog.shoulder : dog.hip;
@@ -906,17 +923,17 @@
 
       verlet(l.knee, .28 * SC, .92);
       for (var k = 0; k < 4; k++){
-        pull(anch, l.knee, 16.5 * SC);
-        pull(l.paw, l.knee, 16.5 * SC);
+        pull(anch, l.knee, 13.5 * SC);
+        pull(l.paw, l.knee, 13.5 * SC);
       }
     }
 
     /* head springs toward a carry position but bobs under gravity */
     verlet(dog.head, .32 * SC, .9);
-    var htx = dog.shoulder.x + 16 * SC * dog.dir, hty = dog.shoulder.y - 22 * SC;
+    var htx = dog.shoulder.x + 15 * SC * dog.dir, hty = dog.shoulder.y - 21 * SC;
     dog.head.x += (htx - dog.head.x) * .16;
     dog.head.y += (hty - dog.head.y) * .16;
-    pull(dog.shoulder, dog.head, 27 * SC);
+    pull(dog.shoulder, dog.head, 25 * SC);
     dog.neck.x = (dog.shoulder.x + dog.head.x) * .5;
     dog.neck.y = (dog.shoulder.y + dog.head.y) * .5;
 
@@ -950,14 +967,14 @@
   function drawLeg(l, col){
     var anch = l.front ? dog.shoulder : dog.hip;
     dctx.strokeStyle = col; dctx.fillStyle = col;
-    dctx.lineCap = "round"; dctx.lineJoin = "round"; dctx.lineWidth = 6.2 * SC;
+    dctx.lineCap = "round"; dctx.lineJoin = "round"; dctx.lineWidth = 7.8 * SC;
     dctx.beginPath();
     dctx.moveTo(anch.x, anch.y + 4 * SC);
     dctx.lineTo(l.knee.x, l.knee.y);
     dctx.lineTo(l.paw.x, l.paw.y);
     dctx.stroke();
     dctx.beginPath();
-    dctx.ellipse(l.paw.x, l.paw.y, 4.3 * SC, 3.2 * SC, 0, 0, TAU);
+    dctx.ellipse(l.paw.x, l.paw.y, 5.2 * SC, 3.9 * SC, 0, 0, TAU);
     dctx.fill();
   }
 
@@ -979,21 +996,21 @@
     var mx = (dog.shoulder.x + dog.hip.x) * .5, my = (dog.shoulder.y + dog.hip.y) * .5;
     var ang = Math.atan2(dog.shoulder.y - dog.hip.y, dog.shoulder.x - dog.hip.x);
     dctx.fillStyle = FUR_MID;
-    fluff(mx, my + 1.6 * SC, 21.5 * SC, 15 * SC, ang, 9, .085, .7); dctx.fill();
+    fluff(mx, my + 1.6 * SC, 19.5 * SC, 15.5 * SC, ang, 9, .09, .7); dctx.fill();
     dctx.fillStyle = FUR;
-    fluff(mx, my - SC, 20 * SC, 13.5 * SC, ang, 9, .08, 2.2); dctx.fill();
+    fluff(mx, my - SC, 18 * SC, 14 * SC, ang, 9, .085, 2.2); dctx.fill();
   }
 
   function drawHead(){
     dctx.save();
     dctx.translate(dog.head.x, dog.head.y);
-    var tilt = Math.max(-.28, Math.min(.28, (dog.head.y - (dog.shoulder.y - 22 * SC)) * .02));
+    var tilt = Math.max(-.28, Math.min(.28, (dog.head.y - (dog.shoulder.y - 21 * SC)) * .02));
     dctx.rotate(tilt);
     dctx.scale(dog.dir, 1);
 
     /* pointed pomeranian ears, floppy with the gait */
     var flop = Math.sin(dog.gait * TAU * 2) * .13;
-    var ears = [[-7.5, -10, -.42 + flop, 1.08], [7.5, -11.5, .1 + flop, .97]];
+    var ears = [[-8.5, -12, -.42 + flop, 1.12], [8.5, -14, .1 + flop, 1]];
     for (var e = 0; e < ears.length; e++){
       dctx.save();
       dctx.translate(ears[e][0] * SC, ears[e][1] * SC);
@@ -1010,24 +1027,29 @@
     }
 
     dctx.fillStyle = FUR;
-    fluff(0, 0, 15 * SC, 13.5 * SC, 0, 8, .1, 1.4); dctx.fill();
-    dctx.beginPath(); dctx.ellipse(12 * SC, 4 * SC, 8.4 * SC, 5.6 * SC, .14, 0, TAU); dctx.fill();
+    fluff(0, 0, 17.5 * SC, 16 * SC, 0, 8, .1, 1.4); dctx.fill();
+    dctx.beginPath(); dctx.ellipse(11.5 * SC, 5 * SC, 7.6 * SC, 5.6 * SC, .14, 0, TAU); dctx.fill();
 
-    dctx.fillStyle = "rgba(242,173,194,.45)";
-    dctx.beginPath(); dctx.ellipse(1.5 * SC, 6 * SC, 3.8 * SC, 2.4 * SC, 0, 0, TAU); dctx.fill();
+    dctx.fillStyle = "rgba(242,150,180,.55)";
+    dctx.beginPath(); dctx.ellipse(1 * SC, 7 * SC, 4.6 * SC, 2.9 * SC, 0, 0, TAU); dctx.fill();
 
     dctx.fillStyle = INK;
-    dctx.beginPath(); dctx.ellipse(18.6 * SC, 2.4 * SC, 2.9 * SC, 2.3 * SC, 0, 0, TAU); dctx.fill();
+    dctx.beginPath(); dctx.ellipse(17.2 * SC, 2.6 * SC, 3.2 * SC, 2.6 * SC, 0, 0, TAU); dctx.fill();
     dctx.strokeStyle = INK; dctx.lineWidth = 1.1 * SC; dctx.lineCap = "round";
     dctx.beginPath();
-    dctx.moveTo(17 * SC, 5.8 * SC);
-    dctx.quadraticCurveTo(13.4 * SC, 8.4 * SC, 10.4 * SC, 6.8 * SC);
+    dctx.moveTo(16 * SC, 6.2 * SC);
+    dctx.quadraticCurveTo(13 * SC, 9.2 * SC, 9.8 * SC, 7.2 * SC);
     dctx.stroke();
+    dctx.fillStyle = "#ff8fae";
+    dctx.beginPath();
+    dctx.ellipse(13.2 * SC, 9.4 * SC, 2.6 * SC, 2.1 * SC, .2, 0, TAU);
+    dctx.fill();
 
     dctx.fillStyle = INK;
-    dctx.beginPath(); dctx.ellipse(5.4 * SC, -2 * SC, 2.7 * SC, 3.1 * SC, 0, 0, TAU); dctx.fill();
+    dctx.beginPath(); dctx.ellipse(6 * SC, -2.4 * SC, 3.7 * SC, 4.2 * SC, 0, 0, TAU); dctx.fill();
     dctx.fillStyle = "#fff";
-    dctx.beginPath(); dctx.arc(6.3 * SC, -3.2 * SC, 1.05 * SC, 0, TAU); dctx.fill();
+    dctx.beginPath(); dctx.arc(7.2 * SC, -4 * SC, 1.6 * SC, 0, TAU); dctx.fill();
+    dctx.beginPath(); dctx.arc(4.9 * SC, -.7 * SC, .75 * SC, 0, TAU); dctx.fill();
     dctx.restore();
   }
 
@@ -1045,7 +1067,7 @@
     drawLeg(dog.legs[2], FUR);
     drawLeg(dog.legs[3], FUR);
     dctx.fillStyle = FUR;
-    fluff(dog.neck.x, dog.neck.y + 2 * SC, 11.5 * SC, 10.5 * SC, 0, 8, .13, 3.1);
+    fluff(dog.neck.x, dog.neck.y + 2 * SC, 12.5 * SC, 11.5 * SC, 0, 8, .14, 3.1);
     dctx.fill();
     drawHead();
   }
@@ -1145,7 +1167,13 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
-  window.addEventListener("resize", function(){ buildStars(); fxResize(); if (dogReady) dogResize(); });
+  var reflow;
+  window.addEventListener("resize", function(){
+    buildStars(); fxResize();
+    if (dogReady) dogResize();
+    clearTimeout(reflow);
+    reflow = setTimeout(function(){ if (gardenGrown) growGarden(true); }, 220);
+  });
 })();
 </script>
 </body>
